@@ -57,6 +57,9 @@ migrate: ## Apply DB migrations (alembic upgrade head)
 migration: ## Autogenerate a migration: make migration m="add x"
 	@$(LOAD_ENV) uv run alembic revision --autogenerate -m "$(m)"
 
+reindex: ## Re-embed the corpus into VECTOR_COLLECTION (dev→live embedder switch)
+	@$(LOAD_ENV) uv run python -m app.reindex
+
 # --- CI/CD (PRD2 §13) ---
 
 ci: ## CI gate: lint + typecheck + unit + eval (what the pipeline runs)

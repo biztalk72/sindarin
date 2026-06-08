@@ -148,10 +148,14 @@
 
 ---
 
+## Go-live (real LLM) — readiness
+- `cc:完了` Dev→live switch tooling — `app.reindex` + `make reindex` re-embeds the persisted corpus into a fresh collection (embedder switch changes the vector space); `select_embedder`/`select_generator` flip to OpenAI when `OPENAI_API_KEY`+`EMBEDDING_MODEL` set; `docs/runbooks/go-live.md`. 2 tests; gates green.
+- `cc:TODO` **Provide endpoint + run go-live** — needs OpenAI-compatible base_url/key + chat model + embedding model/dim in `.env`, then `make reindex` + restart (runbook). *Blocked on endpoint credentials.*
+
 ## Open ADR follow-ups (PRD2 §15 — decide before/within the relevant epic)
 
 - `cc:TODO` Vector-DB backend — Qdrant vs pgvector (E6, P0 benchmark)
-- `cc:TODO` Embedding model — KO/EN/GB10 constraints (E6)
+- `cc:TODO` Embedding model — KO/EN/GB10 constraints (E6); record once the live model is chosen
 - `cc:TODO` Model routing — rule-based v1; LLM-judged routing experiment in Phase 2 (E7)
 - `cc:TODO` UI graph library — React Flow / Cytoscape.js / Sigma.js / ECharts Graph (E10)
 
