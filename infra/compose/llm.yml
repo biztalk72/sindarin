@@ -1,0 +1,67 @@
+# Self-hosted OpenAI-compatible LLM stack for the GB10 node (ADR-0001). Overlay — use WITH the
+# app stack so the api reaches these by service name on the shared network:
+#
+#   docker compose --env-file .env -f infra/compose/dev.yml -f infra/compose/llm.yml up -d
+#
+# Then in .env (in-network URLs — no host IP needed):
+#   OPENAI_BASE_URL=http://vllm-chat:8000/v1     ANSWER_MODEL=qwen2.5-14b
+#   EMBEDDING_BASE_URL=http://vllm-embed:8000/v1 EMBEDDING_MODEL=bge-m3  EMBEDDING_DIM=1024
+#
+# GB10 = Grace Blackwell (aarch64 + Blackwell GPU): use vLLM images with sm_100 support.
+# Models download once into the shared hf-cache volume.
+name: hybrid-idp
+
+x-vllm: &vllm
+  image: ${VLLM_IMAGE:-vllm/vllm-openai:latest}
+  restart: unless-stopped
+  volumes: ["hf-cache:/root/.cache/huggingface"]
+  shm_size: "8gb"
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+services:
+  vllm-chat:
+    <<: *vllm
+    command:
+      - "--model"
+      - "${CHAT_MODEL:-Qwen/Qwen2.5-14B-Instruct}"
+      - "--served-model-name"
+      - "${ANSWER_MODEL:-qwen2.5-14b}"
+      - "--api-key"
+      - "${OPENAI_API_KEY:?set OPENAI_API_KEY in .env}"
+      - "--max-model-len"
+      - "${VLLM_MAX_LEN:-8192}"
+    ports: ["${VLLM_CHAT_PORT:-8001}:8000"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 30s
+      timeout: 5s
+      retries: 20
+      start_period: 600s   # model load can take minutes on first run
+
+  vllm-embed:
+    <<: *vllm
+    command:
+      - "--model"
+      - "${EMBED_MODEL:-BAAI/bge-m3}"
+      - "--task"
+      - "embed"
+      - "--served-model-name"
+      - "${EMBEDDING_MODEL:-bge-m3}"
+      - "--api-key"
+      - "${OPENAI_API_KEY:?set OPENAI_API_KEY in .env}"
+    ports: ["${VLLM_EMBED_PORT:-8082}:8000"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 30s
+      timeout: 5s
+      retries: 20
+      start_period: 600s
+
+volumes:
+  hf-cache:
