@@ -1,0 +1,37 @@
+{
+  "document_id": "33333333-3333-4333-8333-333333333333",
+  "source_uri": "s3://hybrid-idp/samples/scanned_report.pdf",
+  "document_type": "pdf",
+  "blocks": [
+    {
+      "block_id": "p1_h1",
+      "block_type": "heading",
+      "text": "분기 실적 보고서",
+      "page_no": 1,
+      "bbox": {"x": 0.1, "y": 0.05, "w": 0.8, "h": 0.06}
+    },
+    {
+      "block_id": "p1_para1",
+      "block_type": "paragraph",
+      "text": "본 보고서는 2026년 1분기 실적을 요약한다.",
+      "page_no": 1,
+      "bbox": {"x": 0.1, "y": 0.15, "w": 0.8, "h": 0.04}
+    },
+    {
+      "block_id": "p2_t1",
+      "block_type": "table",
+      "text": "분기별 매출",
+      "page_no": 2,
+      "bbox": {"x": 0.1, "y": 0.2, "w": 0.8, "h": 0.3},
+      "table_schema": {
+        "headers": ["분기", "매출"],
+        "rows": [["1Q", "120"], ["2Q", "135"]],
+        "merged_cells": [],
+        "caption": "분기별 매출(억원)"
+      }
+    }
+  ],
+  "semantic_keywords": [{"keyword": "분기 실적", "kind": "업무", "weight": 0.85}],
+  "metadata": {},
+  "quality": {"parser": "paddleocr-vl", "parser_version": "0.0.1", "ocr_confidence": 0.95, "used_fallback": false}
+}

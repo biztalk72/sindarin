@@ -1,0 +1,43 @@
+{
+  "document_id": "44444444-4444-4444-8444-444444444444",
+  "source_uri": "s3://hybrid-idp/samples/notice.hwpx",
+  "document_type": "hwpx",
+  "blocks": [
+    {
+      "block_id": "sec1_h",
+      "block_type": "heading",
+      "text": "개인정보 처리방침 개정 공고",
+      "page_no": 1,
+      "section_id": "sec_1",
+      "section_path": ["공고"]
+    },
+    {
+      "block_id": "sec1_p1",
+      "block_type": "paragraph",
+      "text": "개인정보 보호법 제30조에 따라 처리방침을 다음과 같이 개정한다.",
+      "page_no": 1,
+      "section_id": "sec_1",
+      "section_path": ["공고", "근거"]
+    },
+    {
+      "block_id": "sec2_t1",
+      "block_type": "table",
+      "text": "개정 전후 비교",
+      "page_no": 1,
+      "section_id": "sec_2",
+      "section_path": ["공고", "개정내용"],
+      "table_schema": {
+        "headers": ["항목", "개정 전", "개정 후"],
+        "rows": [["보존기간", "3년", "5년"]],
+        "merged_cells": [],
+        "caption": "개정 전후 비교"
+      }
+    }
+  ],
+  "semantic_keywords": [
+    {"keyword": "개인정보 보호법", "kind": "법령명", "weight": 0.95, "confidence": 0.9},
+    {"keyword": "제30조", "kind": "법령명", "weight": 0.7}
+  ],
+  "metadata": {"author": "정보보호팀", "created_at": "2026-04-15", "security_label": "internal"},
+  "quality": {"parser": "hwpx-native", "parser_version": "0.0.1", "used_fallback": false}
+}

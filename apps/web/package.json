@@ -1,0 +1,35 @@
+{
+  "name": "hybrid-idp-web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Next.js 15 — 3-pane document AI workspace + admin dashboard (PRD2 §8)",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "next-intl": "^3.20.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.5.0",
+    "@testing-library/react": "^16.1.0",
+    "@eslint/eslintrc": "^3.1.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.0.0",
+    "eslint-config-next": "^15.0.0",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,30 @@
+[project]
+name = "hybrid-idp-api"
+version = "0.0.0"
+description = "FastAPI: auth, ACL, upload, chat orchestration, admin (PRD2 §9)"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pydantic-settings>=2.4",
+  "python-multipart>=0.0.9",   # multipart upload (/api/upload)
+  "pyjwt>=2.9",                # single-org JWT (ADR-0005)
+  "alembic>=1.13",             # schema migrations on container startup (self-migrating)
+  "openai>=1.40",              # OpenAI-compatible client only (ADR-0001)
+  "document-ir",
+  "rag-core",
+  "hybrid-idp-shared",
+  "hybrid-idp-db",
+  # Synchronous upload routing (MVP) — parser workers invoked inline; async queue is the
+  # production path (PRD2 §3). These add no heavy ML deps (paddle is added when OCR is wired).
+  "hybrid-idp-markitdown-worker",
+  "hybrid-idp-ocr-worker",
+  "hybrid-idp-hwpx-worker",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

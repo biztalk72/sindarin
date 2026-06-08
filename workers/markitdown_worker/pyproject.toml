@@ -1,0 +1,13 @@
+[project]
+name = "hybrid-idp-markitdown-worker"
+version = "0.0.0"
+description = "Office/target preprocessing → page-anchored Document IR (ADR-0007, PRD2 §5.2)"
+requires-python = ">=3.12"
+dependencies = ["document-ir", "hybrid-idp-shared", "markitdown[docx,xlsx]"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["markitdown_worker"]

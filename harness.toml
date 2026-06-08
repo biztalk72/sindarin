@@ -1,0 +1,45 @@
+# Harness v4 Configuration
+# Edit this file, then run `harness sync` to generate CC plugin files.
+
+[project]
+name = "hybrid-IDP"
+version = "1.0.0-rc1"
+description = "Hybrid IDP — single-org self-hosted RAG-IDP with vectorless PageIndex retrieval, OpenAI-compatible model rotation, guardrails, proof-based citations, and an admin eval dashboard."
+
+[agent]
+# default agent for harness-work; align with PRD's partner-first stance.
+# default = "worker"
+
+[env]
+# Scrub host environment from subprocesses by default.
+CLAUDE_CODE_SUBPROCESS_ENV_SCRUB = "1"
+
+[safety.permissions]
+deny = [
+  "Bash(sudo:*)",
+  "Bash(rm -rf /:*)",
+]
+ask = [
+  "Bash(rm -r:*)",
+  "Bash(git push --force:*)",
+  "Bash(git push --force-with-lease:*)",
+  "Bash(terraform destroy:*)",
+  "Bash(aws iam:*)",
+  "Bash(kubectl delete:*)",
+]
+
+[safety.sandbox]
+failIfUnavailable = false
+
+[safety.sandbox.filesystem]
+denyRead = [
+  ".env",
+  ".env.*",
+  "secrets/**",
+  "**/credentials/**",
+  "**/*.pem",
+  "**/*.key",
+]
+allowRead = [
+  ".env.example",
+]

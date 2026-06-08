@@ -1,0 +1,32 @@
+{
+  "document_id": "22222222-2222-4222-8222-222222222222",
+  "source_uri": "s3://hybrid-idp/samples/budget.xlsx",
+  "document_type": "xlsx",
+  "blocks": [
+    {
+      "block_id": "sheet1",
+      "block_type": "sheet",
+      "text": "2026 예산",
+      "page_no": 1,
+      "section_id": "sheet_1",
+      "section_path": ["2026 예산"]
+    },
+    {
+      "block_id": "sheet1_t1",
+      "block_type": "table",
+      "text": "부서별 예산 배정",
+      "page_no": 1,
+      "section_id": "sheet_1",
+      "section_path": ["2026 예산"],
+      "table_schema": {
+        "headers": ["부서", "Q1", "Q2"],
+        "rows": [["개발", "5000", "5200"], ["영업", "3000", "3100"]],
+        "merged_cells": [],
+        "caption": null
+      }
+    }
+  ],
+  "semantic_keywords": [{"keyword": "예산", "kind": "업무", "weight": 0.7}],
+  "metadata": {"sheets": ["2026 예산"]},
+  "quality": {"parser": "markitdown", "parser_version": "0.0.1", "used_fallback": false}
+}

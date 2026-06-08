@@ -1,0 +1,15 @@
+[project]
+name = "hybrid-idp-hwpx-worker"
+version = "0.0.0"
+description = "HWPX native XML parser → Document IR (ADR-0003, PRD2 §5.4)"
+requires-python = ">=3.12"
+dependencies = ["document-ir", "hybrid-idp-shared"]
+# Legacy HWP5 fallback uses pyhwp → hwp5txt → render+VLM (the VLM goes via the
+# OpenAI-compatible client per ADR-0001/ADR-0009).
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["hwpx_worker"]

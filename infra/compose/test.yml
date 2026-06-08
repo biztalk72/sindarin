@@ -1,0 +1,24 @@
+# Minimal backing services for integration tests (make test-int / Harness integration-tests).
+name: hybrid-idp-test
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: hybrid_idp_test
+      POSTGRES_USER: hybrid_idp
+      POSTGRES_PASSWORD: hybrid_idp
+    ports: ["55432:5432"]
+    tmpfs: ["/var/lib/postgresql/data"]  # ephemeral, fast
+
+  object-store:
+    image: minio/minio:latest
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports: ["59000:9000"]
+
+  vector-db:
+    image: qdrant/qdrant:latest
+    ports: ["56333:6333"]

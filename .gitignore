@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node / Next.js
+node_modules/
+apps/web/.next/
+apps/web/out/
+*.tsbuildinfo
+# Note: keep uv.lock committed for reproducible builds (do not ignore).
+
+# Env / secrets (also denied by harness sandbox)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Blob store (dev) + local artifacts
+.blobstore/
+out/
+
+# Harness runtime state (not project source)
+.harness-mem/
+
+# OS
+.DS_Store
+
+# Harness session state
+.claude/state/
+.claude/sessions/
+apps/web/.claude/
+**/.claude/sessions/
+**/.claude/state/

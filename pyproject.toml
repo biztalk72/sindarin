@@ -1,0 +1,52 @@
+[project]
+name = "hybrid-idp"
+version = "0.0.0"
+description = "Hybrid IDP — self-hosted intelligent document processing + RAG workspace"
+requires-python = ">=3.12"
+
+# uv workspace: each member ships its own pyproject.toml.
+# apps/web is a separate Node/Next.js workspace (see apps/web/package.json).
+[tool.uv.workspace]
+members = ["apps/api", "workers/*", "packages/*"]
+
+[tool.uv.sources]
+hybrid-idp-shared = { workspace = true }
+document-ir = { workspace = true }
+rag-core = { workspace = true }
+hybrid-idp-db = { workspace = true }
+hybrid-idp-markitdown-worker = { workspace = true }
+hybrid-idp-ocr-worker = { workspace = true }
+hybrid-idp-hwpx-worker = { workspace = true }
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  "httpx>=0.27",
+  "alembic>=1.13",
+  "hybrid-idp-db",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["apps/web", "infra/migrations/versions"]  # generated migrations
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E501"]  # test fixture literals (e.g. embedded XML) may be long
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+# Tests + generated migrations are not held to strict typing.
+exclude = ["apps/web", "tests/", "infra/migrations/", "/tests/"]
+
+# Third-party libs without type stubs.
+[[tool.mypy.overrides]]
+module = ["markitdown.*", "qdrant_client.*", "pypdf.*"]
+ignore_missing_imports = true
