@@ -12,15 +12,17 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "bootstrap": "^4.6.2",
     "next": "^15.0.0",
+    "next-intl": "^3.20.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "next-intl": "^3.20.0"
+    "shards-ui": "^3.0.0"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.1.0",
     "@testing-library/jest-dom": "^6.5.0",
     "@testing-library/react": "^16.1.0",
-    "@eslint/eslintrc": "^3.1.0",
     "@testing-library/user-event": "^14.5.2",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import {
@@ -41,86 +40,123 @@ export function AdminDashboard() {
   return (
     <div className="admin">
       <header className="admin-head">
-        <Link className="admin-back" href="/">
-          ← workspace
-        </Link>
-        <h1>Admin · 관찰성</h1>
+        <h1>Operations</h1>
+        <span className="admin-sub">Health · Metrics · Jobs · Audit</span>
       </header>
 
-      <section className="admin-card">
-        <h2>Health</h2>
-        {health && (
-          <div className="health-row">
+      {metrics && (
+        <section className="admin-stats" aria-label="key metrics">
+          <div className="stat-card">
+            <div className="stat-label">Documents</div>
+            <div className="stat-value">{metrics.documents}</div>
+            <div className="stat-meta">indexed corpus</div>
+          </div>
+          <div className="stat-card success">
+            <div className="stat-label">Chunks</div>
+            <div className="stat-value">{metrics.chunks}</div>
+            <div className="stat-meta">retrievable units</div>
+          </div>
+          <div className="stat-card info">
+            <div className="stat-label">Users</div>
+            <div className="stat-value">{metrics.users}</div>
+            <div className="stat-meta">single-org</div>
+          </div>
+          <div className="stat-card warning">
+            <div className="stat-label">Audit events</div>
+            <div className="stat-value">{metrics.audit_events}</div>
+            <div className="stat-meta">model + admin actions</div>
+          </div>
+        </section>
+      )}
+
+      <section className="s-card">
+        <div className="s-card-header">
+          <h2>Health</h2>
+          {health && (
             <span className={`status-badge status-${health.status === "ok" ? "indexed" : "error"}`}>
               {health.status}
             </span>
-            {Object.entries(health.components).map(([k, v]) => (
-              <span key={k} className="comp">
-                {k}: <b className={v === "error" ? "bad" : "good"}>{v}</b>
-              </span>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="admin-card">
-        <h2>Metrics</h2>
-        {metrics && (
-          <div className="metrics-grid">
-            <div><span className="metric-n">{metrics.documents}</span>documents</div>
-            <div><span className="metric-n">{metrics.chunks}</span>chunks</div>
-            <div><span className="metric-n">{metrics.users}</span>users</div>
-            <div><span className="metric-n">{metrics.audit_events}</span>audit events</div>
-            <div className="metric-wide">
-              jobs: {Object.entries(metrics.ingestion_jobs).map(([s, n]) => `${s}=${n}`).join(", ") || "—"}
+          )}
+        </div>
+        <div className="s-card-body">
+          {health && (
+            <div className="health-row">
+              {Object.entries(health.components).map(([k, v]) => (
+                <span key={k} className="comp">
+                  {k}: <b className={v === "error" ? "bad" : "good"}>{v}</b>
+                </span>
+              ))}
             </div>
-            <div className="metric-wide">GB10: {metrics.gb10_telemetry}</div>
+          )}
+        </div>
+      </section>
+
+      {metrics && (
+        <section className="s-card">
+          <div className="s-card-header"><h2>System</h2></div>
+          <div className="s-card-body">
+            <div className="metrics-grid">
+              <div className="metric-wide">
+                <span className="metric-n">
+                  {Object.entries(metrics.ingestion_jobs).map(([s, n]) => `${s}=${n}`).join(", ") || "—"}
+                </span>
+                ingestion jobs
+              </div>
+              <div className="metric-wide">
+                <span className="metric-n">{metrics.gb10_telemetry}</span>
+                GB10 telemetry
+              </div>
+            </div>
           </div>
-        )}
+        </section>
+      )}
+
+      <section className="s-card">
+        <div className="s-card-header"><h2>Ingestion jobs</h2></div>
+        <div className="s-card-body" style={{ padding: 0 }}>
+          <table className="admin-table">
+            <thead>
+              <tr><th>Document</th><th>Stage</th><th>Status</th><th>Warnings</th></tr>
+            </thead>
+            <tbody>
+              {jobs.map((j) => {
+                const warnings = (j.metrics?.warnings as string[]) ?? [];
+                return (
+                  <tr key={j.id}>
+                    <td>{j.document_name ?? j.document_id.slice(0, 8)}</td>
+                    <td>{j.stage}</td>
+                    <td>
+                      <span className={`status-badge status-${j.status === "success" ? "indexed" : "error"}`}>
+                        {j.status}
+                      </span>
+                    </td>
+                    <td>{warnings.length ? `⚠ ${warnings.length}` : "—"}</td>
+                  </tr>
+                );
+              })}
+              {jobs.length === 0 && <tr><td colSpan={4} className="pane-placeholder">no jobs</td></tr>}
+            </tbody>
+          </table>
+        </div>
       </section>
 
-      <section className="admin-card">
-        <h2>Ingestion jobs</h2>
-        <table className="admin-table">
-          <thead>
-            <tr><th>document</th><th>stage</th><th>status</th><th>warnings</th></tr>
-          </thead>
-          <tbody>
-            {jobs.map((j) => {
-              const warnings = (j.metrics?.warnings as string[]) ?? [];
-              return (
-                <tr key={j.id}>
-                  <td>{j.document_name ?? j.document_id.slice(0, 8)}</td>
-                  <td>{j.stage}</td>
-                  <td>
-                    <span className={`status-badge status-${j.status === "success" ? "indexed" : "error"}`}>
-                      {j.status}
-                    </span>
-                  </td>
-                  <td>{warnings.length ? `⚠ ${warnings.length}` : "—"}</td>
+      <section className="s-card">
+        <div className="s-card-header"><h2>Recent audit</h2></div>
+        <div className="s-card-body" style={{ padding: 0 }}>
+          <table className="admin-table">
+            <thead><tr><th>Action</th><th>Actor</th><th>When</th></tr></thead>
+            <tbody>
+              {audit.map((a, i) => (
+                <tr key={i}>
+                  <td>{a.action}</td>
+                  <td>{a.actor_id ? a.actor_id.slice(0, 8) : "—"}</td>
+                  <td>{a.created_at?.replace("T", " ").slice(0, 19) ?? ""}</td>
                 </tr>
-              );
-            })}
-            {jobs.length === 0 && <tr><td colSpan={4} className="pane-placeholder">no jobs</td></tr>}
-          </tbody>
-        </table>
-      </section>
-
-      <section className="admin-card">
-        <h2>Recent audit</h2>
-        <table className="admin-table">
-          <thead><tr><th>action</th><th>actor</th><th>when</th></tr></thead>
-          <tbody>
-            {audit.map((a, i) => (
-              <tr key={i}>
-                <td>{a.action}</td>
-                <td>{a.actor_id ? a.actor_id.slice(0, 8) : "—"}</td>
-                <td>{a.created_at?.replace("T", " ").slice(0, 19) ?? ""}</td>
-              </tr>
-            ))}
-            {audit.length === 0 && <tr><td colSpan={3} className="pane-placeholder">no events</td></tr>}
-          </tbody>
-        </table>
+              ))}
+              {audit.length === 0 && <tr><td colSpan={3} className="pane-placeholder">no events</td></tr>}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   );

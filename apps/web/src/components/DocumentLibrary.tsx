@@ -58,8 +58,6 @@ export function DocumentLibrary({ documents, selected, onToggle, onChanged }: Pr
 
   return (
     <div className="library">
-      <h1 className="brand">Hybrid IDP</h1>
-
       <button
         type="button"
         className="upload-btn"
