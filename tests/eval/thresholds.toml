@@ -1,0 +1,15 @@
+# Release-gate eval thresholds (ADR-0004, PRD2 §10.2). The eval stage blocks release if any
+# metric falls below its floor. Tune as golden sets grow; never lower silently.
+
+[retrieval]
+recall_at_10 = 0.90          # golden query Recall@10 (KO + EN)
+citation_anchor_accuracy = 0.90
+
+[trust]
+citation_precision = 0.90
+unsupported_claim_rate_max = 0.05
+
+[ingestion]
+markitdown_parse_success = 0.97
+hwpx_native_parse_success = 0.95
+scanned_pdf_ocr_confidence_mean = 0.90

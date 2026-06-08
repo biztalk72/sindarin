@@ -1,0 +1,13 @@
+[project]
+name = "hybrid-idp-shared"
+version = "0.0.0"
+description = "Shared types, constants, and roles across api + workers"
+requires-python = ">=3.12"
+dependencies = ["pydantic>=2.7"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["hybrid_idp_shared"]

@@ -1,0 +1,8 @@
+{
+  "name": "hybrid-IDP",
+  "version": "1.0.0-rc1",
+  "description": "Hybrid IDP — single-org self-hosted RAG-IDP with vectorless PageIndex retrieval, OpenAI-compatible model rotation, guardrails, proof-based citations, and an admin eval dashboard.",
+  "skills": [
+    "./skills/"
+  ]
+}

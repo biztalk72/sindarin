@@ -1,0 +1,73 @@
+# Hybrid IDP dev stack (GB10 single node, PRD2 §3). IMAGE_TAG defaults to "dev".
+# Worker memory limits / concurrency caps reflect the unified-memory contention policy.
+name: hybrid-idp
+
+x-worker-base: &worker-base
+  build:
+    context: ../..
+    dockerfile: infra/docker/worker.Dockerfile
+  env_file: ../../.env
+  depends_on: [postgres, object-store, vector-db]
+  restart: unless-stopped
+  mem_limit: 8g
+
+services:
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+    ports: ["${WEB_PORT:-3000}:3000"]
+    environment:
+      API_PROXY_TARGET: http://api:8000   # same-origin /api/* proxy (next.config rewrites)
+    depends_on: [api]
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    ports: ["${API_PORT:-8000}:8000"]
+    env_file: ../../.env
+    depends_on: [postgres, object-store, vector-db]
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hybrid_idp}
+      POSTGRES_USER: ${POSTGRES_USER:-hybrid_idp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hybrid_idp}
+    ports: ["${POSTGRES_PUBLISHED_PORT:-5432}:5432"]   # host access for migrations/tools
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-hybrid_idp}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  object-store:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${OBJECT_STORE_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${OBJECT_STORE_SECRET_KEY:-minioadmin}
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["miniodata:/data"]
+
+  vector-db:
+    image: qdrant/qdrant:latest
+    ports: ["6333:6333"]
+    volumes: ["qdrantdata:/qdrant/storage"]
+
+  worker-markitdown: { <<: *worker-base, build: { context: ../.., dockerfile: infra/docker/worker.Dockerfile, args: { WORKER: markitdown_worker } } }
+  worker-ocr:        { <<: *worker-base, build: { context: ../.., dockerfile: infra/docker/worker.Dockerfile, args: { WORKER: ocr_worker } } }
+  worker-hwpx:       { <<: *worker-base, build: { context: ../.., dockerfile: infra/docker/worker.Dockerfile, args: { WORKER: hwpx_worker } } }
+  worker-embedding:  { <<: *worker-base, build: { context: ../.., dockerfile: infra/docker/worker.Dockerfile, args: { WORKER: embedding_worker } } }
+  worker-eval:       { <<: *worker-base, build: { context: ../.., dockerfile: infra/docker/worker.Dockerfile, args: { WORKER: eval_worker } } }
+
+  # monitoring: Prometheus/Grafana or lightweight collector (PRD2 §10.3) — add in E11.
+
+volumes:
+  pgdata:
+  miniodata:
+  qdrantdata:

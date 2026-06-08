@@ -1,0 +1,182 @@
+# Hybrid IDP CI/CD — test → staging → production (PRD2 §13).
+#
+# Replace the <...PLACEHOLDER...> connector/registry/secret refs with your Harness resources.
+# Stage commands mirror the root Makefile + infra/scripts so local and CI behave identically.
+# Flow: CI gates → build/push images → deploy staging → smoke + eval gate → MANUAL APPROVAL →
+#       deploy prod → smoke + continuous verification (auto-rollback on breach).
+pipeline:
+  name: hybrid-idp-ci-cd
+  identifier: hybrid_idp_ci_cd
+  projectIdentifier: hybrid_idp
+  orgIdentifier: default
+  tags:
+    product: hybrid-idp
+  properties:
+    ci:
+      codebase:
+        connectorRef: <GIT_CONNECTOR>
+        repoName: hybrid-idp
+        build: <+input>
+  stages:
+    # 1) TEST — lint, typecheck, unit, integration, security (gates the whole pipeline).
+    - stage:
+        name: test
+        identifier: test
+        type: CI
+        spec:
+          cloneCodebase: true
+          execution:
+            steps:
+              - step:
+                  name: lint-and-typecheck
+                  identifier: lint_typecheck
+                  type: Run
+                  spec:
+                    shell: Bash
+                    command: |
+                      make install
+                      make lint typecheck
+              - step:
+                  name: unit-tests
+                  identifier: unit_tests
+                  type: Run
+                  spec: { shell: Bash, command: "make test" }
+              - step:
+                  name: integration-tests
+                  identifier: integration_tests
+                  type: Run
+                  spec: { shell: Bash, command: "make test-int" }
+              - step:
+                  name: security-scan
+                  identifier: security_scan
+                  type: Run
+                  spec: { shell: Bash, command: "make security-scan" }
+
+    # 2) BUILD + PUSH images, tagged with the build id.
+    - stage:
+        name: build-and-push
+        identifier: build_and_push
+        type: CI
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: build-and-push-images
+                  identifier: build_push
+                  type: Run
+                  spec:
+                    shell: Bash
+                    command: |
+                      REG=<REGISTRY>/hybrid-idp
+                      TAG=${HARNESS_BUILD_ID}
+                      docker build -t $REG/api:$TAG -f infra/docker/api.Dockerfile .
+                      docker build -t $REG/web:$TAG -f infra/docker/web.Dockerfile .
+                      for w in markitdown ocr hwpx embedding eval; do
+                        docker build -t $REG/worker-$w:$TAG \
+                          --build-arg WORKER=${w}_worker -f infra/docker/worker.Dockerfile .
+                      done
+                      docker push $REG/api:$TAG
+                      docker push $REG/web:$TAG
+                      for w in markitdown ocr hwpx embedding eval; do docker push $REG/worker-$w:$TAG; done
+
+    # 3) DEPLOY STAGING → smoke → eval gate (blocks promotion if below thresholds).
+    - stage:
+        name: deploy-staging
+        identifier: deploy_staging
+        type: Deployment
+        spec:
+          serviceConfig: { serviceRef: hybrid_idp }
+          infrastructure: { environmentRef: staging }
+          execution:
+            steps:
+              - step:
+                  name: deploy
+                  identifier: deploy_staging_step
+                  type: ShellScript
+                  spec:
+                    shell: Bash
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          export REGISTRY=<REGISTRY>/hybrid-idp HEALTH_URL=https://staging.example/api/health
+                          infra/scripts/deploy.sh staging ${HARNESS_BUILD_ID}
+              - step:
+                  name: smoke
+                  identifier: smoke_staging
+                  type: ShellScript
+                  spec:
+                    shell: Bash
+                    source:
+                      type: Inline
+                      spec: { script: "infra/scripts/smoke.sh https://staging.example" }
+              - step:
+                  name: eval-gate
+                  identifier: eval_gate
+                  type: ShellScript
+                  spec:
+                    shell: Bash
+                    source:
+                      type: Inline
+                      spec: { script: "make eval" }   # Recall@10/citation floors (thresholds.toml)
+
+    # 4) MANUAL APPROVAL before production (PRD2 §13.1 manual-approval-prod).
+    - stage:
+        name: approve-prod
+        identifier: approve_prod
+        type: Approval
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: prod-approval
+                  identifier: prod_approval
+                  type: HarnessApproval
+                  spec:
+                    approvalMessage: "Promote ${HARNESS_BUILD_ID} to production?"
+                    approvers: { userGroups: [<ADMIN_USER_GROUP>], minimumCount: 1 }
+
+    # 5) DEPLOY PROD → smoke → continuous verification; auto-rollback on failure.
+    - stage:
+        name: deploy-prod
+        identifier: deploy_prod
+        type: Deployment
+        spec:
+          serviceConfig: { serviceRef: hybrid_idp }
+          infrastructure: { environmentRef: prod }
+          execution:
+            steps:
+              - step:
+                  name: deploy
+                  identifier: deploy_prod_step
+                  type: ShellScript
+                  spec:
+                    shell: Bash
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          export REGISTRY=<REGISTRY>/hybrid-idp HEALTH_URL=https://app.example/api/health
+                          infra/scripts/deploy.sh prod ${HARNESS_BUILD_ID}
+              - step:
+                  name: smoke
+                  identifier: smoke_prod
+                  type: ShellScript
+                  spec:
+                    shell: Bash
+                    source:
+                      type: Inline
+                      spec: { script: "infra/scripts/smoke.sh https://app.example" }
+              - step:
+                  name: continuous-verification
+                  identifier: continuous_verification
+                  type: Verify
+                  spec:
+                    type: Auto
+                    spec: { sensitivity: HIGH, duration: 10m }
+          failureStrategies:
+            - onFailure:
+                errors: [AllErrors]
+                action:
+                  type: StageRollback
+        # Rollback re-deploys the last good tag: infra/scripts/rollback.sh prod <prev_tag>

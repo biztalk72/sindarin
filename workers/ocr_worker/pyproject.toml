@@ -1,0 +1,15 @@
+[project]
+name = "hybrid-idp-ocr-worker"
+version = "0.0.0"
+description = "PaddleOCR / PaddleOCR-VL PDF + image processing → Document IR (ADR-0009, PRD2 §5.3)"
+requires-python = ">=3.12"
+# PaddleOCR/-VL are preprocessing engines, exempt from ADR-0001 (ADR-0009).
+# pypdf for the digital-PDF text-layer classifier (OCR-001); paddle stack added when wired.
+dependencies = ["document-ir", "hybrid-idp-shared", "pypdf>=4.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ocr_worker"]
