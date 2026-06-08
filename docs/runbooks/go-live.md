@@ -19,6 +19,22 @@ VECTOR_COLLECTION=documents_live         # NEW name — avoids the dev dim-64 'd
 `openai_configured()` flips to true once `OPENAI_API_KEY` **and** `EMBEDDING_MODEL` are set;
 `select_embedder`/`select_generator` then return the OpenAI implementations.
 
+### Option B — self-hosted on the GB10 (no data leaves the node)
+Start the bundled vLLM stack (chat + embeddings) on the app network:
+```
+docker compose --env-file .env -f infra/compose/dev.yml -f infra/compose/llm.yml up -d vllm-chat vllm-embed
+```
+Then in `.env` use the in-network endpoints (models/ports come from `infra/compose/llm.yml`):
+```
+OPENAI_BASE_URL=http://vllm-chat:8000/v1
+EMBEDDING_BASE_URL=http://vllm-embed:8000/v1
+ANSWER_MODEL=qwen2.5-14b
+EMBEDDING_MODEL=bge-m3
+EMBEDDING_DIM=1024
+VECTOR_COLLECTION=documents_bge
+```
+First start downloads the models (minutes); the vLLM healthchecks have a 10-min `start_period`.
+
 ## 2. Re-embed the corpus into the new collection
 ```
 make reindex          # reads .env, embeds all document_chunks → VECTOR_COLLECTION at EMBEDDING_DIM
