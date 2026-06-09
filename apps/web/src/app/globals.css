@@ -649,6 +649,15 @@ h1, h2, h3, h4, h5 {
   width: 100%;
   height: auto;
 }
+.force-graph {
+  touch-action: none;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+}
+.force-graph g:hover circle {
+  fill: #006fe6;
+}
 .quality-grid {
   display: grid;
   grid-template-columns: auto 1fr;

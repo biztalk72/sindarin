@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { ForceGraph } from "@/components/ForceGraph";
 import {
   type DocumentQuality,
   type GraphData,
@@ -89,54 +90,6 @@ function KeywordCloud({ keywords }: { keywords: KeywordItem[] }) {
   );
 }
 
-function KeywordGraph({ graph }: { graph: GraphData }) {
-  const { nodes, edges } = graph;
-  if (nodes.length === 0) return <p className="pane-placeholder">그래프 없음 / no graph</p>;
-  const W = 320;
-  const H = 320;
-  const cx = W / 2;
-  const cy = H / 2;
-  const r = 130;
-  const pos = new Map<string, { x: number; y: number }>();
-  nodes.forEach((n, i) => {
-    const angle = (2 * Math.PI * i) / nodes.length - Math.PI / 2;
-    pos.set(n.id, { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) });
-  });
-  const maxW = Math.max(1, ...edges.map((e) => e.weight));
-  return (
-    <svg className="kw-graph" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="keyword graph">
-      {edges.map((e, i) => {
-        const a = pos.get(e.source);
-        const b = pos.get(e.target);
-        if (!a || !b) return null;
-        return (
-          <line
-            key={i}
-            x1={a.x}
-            y1={a.y}
-            x2={b.x}
-            y2={b.y}
-            stroke="#9bbcf5"
-            strokeOpacity={0.25 + 0.6 * (e.weight / maxW)}
-            strokeWidth={1 + 2 * (e.weight / maxW)}
-          />
-        );
-      })}
-      {nodes.map((n) => {
-        const p = pos.get(n.id)!;
-        return (
-          <g key={n.id}>
-            <circle cx={p.x} cy={p.y} r={5} fill="#2563eb" />
-            <text x={p.x} y={p.y - 8} textAnchor="middle" fontSize="10" fill="#1c2024">
-              {n.label}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
 export function InsightPanel({
   documentId,
   onOpenPreview,
@@ -212,7 +165,7 @@ export function InsightPanel({
           />
         )}
         {!loading && !error && tab === "keywords" && <KeywordCloud keywords={keywords} />}
-        {!loading && !error && tab === "graph" && <KeywordGraph graph={graph} />}
+        {!loading && !error && tab === "graph" && <ForceGraph graph={graph} />}
         {!loading && !error && tab === "quality" && <QualityPanel quality={quality} />}
       </div>
     </div>
