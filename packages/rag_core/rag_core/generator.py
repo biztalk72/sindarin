@@ -44,10 +44,12 @@ class DeterministicGenerator:
 _SYSTEM_PROMPT = (
     "You are a document-grounded assistant. Answer ONLY from the provided context passages, "
     "each labelled [chunk_id]. Decompose your answer into atomic claims. Every claim MUST cite "
-    "the chunk_id(s) it is supported by. If the context does not answer the question, return no "
-    "claims. Respond with JSON only: "
+    "the EXACT chunk_id string that appears in brackets at the start of the supporting passage "
+    "(verbatim — including hyphens and the trailing _N suffix). If the context does not answer "
+    "the question, return no claims. Respond with JSON only: "
     '{"claims":[{"text":"<claim>","citations":["<chunk_id>",...]}]}. '
-    "Answer in the same language as the question."
+    "Answer in the same language as the question. "
+    "한국어 질문이면 한국어로 답하고, 인용은 컨텍스트 상단 [chunk_id]를 그대로 복사하세요."
 )
 
 
