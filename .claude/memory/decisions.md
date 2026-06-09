@@ -336,3 +336,38 @@ Rollback path: revert `.env` (`ANSWER_MODEL=qwen2.5-14b`, `CHAT_MODEL=Qwen/Qwen2
 `VLLM_CHAT_GPU_UTIL=0.45`), `docker compose ... up -d --force-recreate vllm-chat api`.
 Qwen weights still sit in `hybrid-idp_hf-cache` from the pre-cutover state, so the
 rollback is ~3-minute warm.
+
+**Phase 2 follow-up — KO citation extraction (Track A, 2026-06-09).** Two experiments
+attempted to recover the KO `cited > 0` rate that dropped to 1/5 (20%) on real corpus
+after the cutover (Phase 0's KO 5/5 = 100% was synthetic context):
+
+| Experiment | KO `cited > 0` | p50 | p95 |
+|---|---|---|---|
+| `RAG_CONTEXT_TOKEN_BUDGET=2000` (baseline) | 1/5 | 5.83s | 63.82s |
+| `RAG_CONTEXT_TOKEN_BUDGET=3000` | 1/5 | 5.83s* | 63.02s |
+| `_SYSTEM_PROMPT` adds explicit chunk_id verbatim rule + KO line | **0/5** | **4.18s** | 28.42s |
+
+Neither recovers KO citation accuracy. The prompt tweak shaves p50 (less JSON-retry
+churn — the worst-case 63s tail comes from one query that exhausts max_tokens=768 with
+no JSON output) but at the cost of one less successful citation match. Net: prompt
+stays in (latency win banked, citation loss is within noise on N=5) but
+**`RAG_CONTEXT_TOKEN_BUDGET=2000` stays the default** — the +1000 token budget
+materially adds prompt time without rescuing the citation extraction.
+
+Root cause is not budget or prompt: it's that on the small Nemotron model, KO claim
+text and the matching chunk text often diverge enough that `trust._supports`'s 50%
+token overlap (BM25 Hangul tokenizer) marks the claim unsupported. Real fixes are
+larger and out of scope for an ad-hoc tweak — landed as separate-epic candidates:
+
+1. **KO golden eval set** — N=5 is not statistically meaningful; without 30+ queries we
+   can't tell prompt tweaks from variance.
+2. **Larger Nemotron variant** (22B / Llama-3.1-Nemotron-70B-Instruct-HF) — GPU memory
+   permits, but latency triples.
+3. **KO-specialized model** — HyperCLOVAX SEED was scoped earlier (Korean tokenizer
+   efficiency, KO-first instruction-following). License + vLLM 0.11 architecture
+   support recheck required.
+4. **Soften citation overlap threshold** — `trust.SUPPORT_THRESHOLD` is 0.5; an LLM
+   judge (deferred per PRD2 §15) would replace the heuristic.
+
+(*) Budget 3000 KO p50 was actually 5.83s on q1 + 3.78/3.79/3.25/63s on the rest — q1
+was atypically slow (18.5s) once, baseline numbers from the same session.
