@@ -24,6 +24,10 @@ class Claim:
 @dataclass
 class AnswerDraft:
     claims: list[Claim] = field(default_factory=list)
+    # Generator-side outcome surfaced to the pipeline so it can warn the user. "ok" is the
+    # happy path; "json_retry" = parsed only after a temp-bump retry; "json_failed" = even
+    # the retry returned unparseable content (claims will be empty).
+    model_outcome: str = "ok"
 
 
 @dataclass

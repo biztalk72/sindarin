@@ -55,15 +55,24 @@ def _build_context(candidates: list[Candidate]) -> str:
     return "\n\n".join(f"[{c.record.chunk_id}] {c.record.text}" for c in candidates)
 
 
-def _parse_draft(content: str) -> AnswerDraft:
+def _parse_draft(content: str) -> AnswerDraft | None:
+    """Parse the model's JSON output into an ``AnswerDraft``.
+
+    Returns ``None`` if the content isn't valid JSON-with-claims, so the caller can decide
+    whether to retry. Distinct from "parsed but no claims" (which is a valid empty draft).
+    """
     import json
 
     try:
         data = json.loads(content)
     except (json.JSONDecodeError, TypeError):
-        return AnswerDraft(claims=[])
+        return None
+    if not isinstance(data, dict) or "claims" not in data:
+        return None
     claims = []
-    for item in data.get("claims", []) if isinstance(data, dict) else []:
+    for item in data.get("claims", []):
+        if not isinstance(item, dict):
+            continue
         text = (item.get("text") or "").strip()
         cites = [str(c) for c in item.get("citations", []) if c]
         if text:
@@ -105,21 +114,43 @@ class OpenAIGenerator:
         if not candidates:
             return AnswerDraft(claims=[])
         client = self._ensure_client()
-        resp = client.chat.completions.create(
-            model=self.model,
-            temperature=self._temperature,
-            # RAG answers are citation-bound and short; without a cap, vLLM defaults to
-            # `max_model_len - prompt_tokens` which on Qwen-14B/8k can mean thousands of
-            # tokens of output (and >40s wall-clock). 768 covers any reasonable cited answer
-            # while keeping p95 well under the upstream proxy timeout.
-            max_tokens=768,
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": f"Question: {query}\n\nContext:\n{_build_context(candidates)}",
-                },
-            ],
+        messages = [
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": f"Question: {query}\n\nContext:\n{_build_context(candidates)}",
+            },
+        ]
+        # RAG answers are citation-bound and short; without a cap, vLLM defaults to
+        # `max_model_len - prompt_tokens` (~7800 on a 14B/8k), and verbose generations can
+        # wallclock minutes. 768 covers any reasonable cited answer well under the upstream
+        # proxy timeout.
+        common = {
+            "model": self.model,
+            "max_tokens": 768,
+            "response_format": {"type": "json_object"},
+            "messages": messages,
+        }
+        resp = client.chat.completions.create(temperature=self._temperature, **common)
+        draft = _parse_draft(resp.choices[0].message.content)
+        if draft is not None:
+            return draft
+
+        # Retry once with a small temperature bump. Anticipates the smaller-model case
+        # (ADR-0011 Nemotron-Nano-8B) where JSON adherence is occasionally brittle; the
+        # retry costs ~0.5–1× a normal call and only fires on the unhappy path.
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "generator: model returned non-JSON, retrying with temp=0.2 (model=%s)", self.model,
         )
-        return _parse_draft(resp.choices[0].message.content)
+        resp = client.chat.completions.create(temperature=0.2, **common)
+        draft = _parse_draft(resp.choices[0].message.content)
+        if draft is not None:
+            draft.model_outcome = "json_retry"
+            return draft
+
+        logging.getLogger(__name__).warning(
+            "generator: JSON retry also failed; dropping answer (model=%s)", self.model,
+        )
+        return AnswerDraft(claims=[], model_outcome="json_failed")
