@@ -13,6 +13,8 @@ from rag_core.guardrails import (
     PiiMatch,
     detect_injection,
     detect_pii,
+    list_injection_policies,
+    list_pii_policies,
     redact_pii,
     strip_injection,
 )
@@ -70,6 +72,8 @@ __all__ = [
     "redact_pii",
     "detect_injection",
     "strip_injection",
+    "list_pii_policies",
+    "list_injection_policies",
     # pipeline
     "RagPipeline",
     "ChatResult",
