@@ -55,6 +55,11 @@ export default function Workspace() {
         <aside className="pane right" aria-label="document insight">
           <InsightPanel
             documentId={selected.size === 1 ? [...selected][0] : null}
+            document={
+              selected.size === 1
+                ? documents.find((d) => d.id === [...selected][0]) ?? null
+                : null
+            }
             onOpenPreview={setPreview}
           />
         </aside>

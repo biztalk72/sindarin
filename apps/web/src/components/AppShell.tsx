@@ -1,22 +1,34 @@
 "use client";
 
+import {
+  IconHeartbeat,
+  IconHistory,
+  IconLayoutDashboard,
+  IconReportSearch,
+} from "@tabler/icons-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { useSession } from "@/components/SessionContext";
 
+// Sidebar groups (PRD2 §8.1 IA + IA-v2 grouping):
+//   MAIN            — Workspace, everyone
+//   MONITORING      — Health & Metrics, Activity Logs (admin / auditor)
+//   AUDIT & COMPLIANCE — Audit Trail (admin / auditor)
+// GUARDRAILS & POLICY group lands in GP3; not rendered in GP1 to avoid an empty header.
+export type ShellRoute = "workspace" | "health" | "logs" | "audit";
+
 interface Props {
   title: string;
-  active: "workspace" | "admin";
+  active: ShellRoute;
   children: ReactNode;
-  /** When the page provides its own scroll container (the 3-pane workspace), opt out of body padding/scroll. */
+  /** Workspace owns its own scroll; opt out of the body padding. */
   flush?: boolean;
 }
 
-// Shards-Dashboard-React-inspired shell: fixed sidebar (nav + brand) + topbar (title + user) + body.
 export function AppShell({ title, active, children, flush = false }: Props) {
   const { role, email, logout } = useSession();
-  const isAdmin = role === "admin";
+  const isOps = role === "admin" || role === "auditor";
 
   return (
     <div className="app-shell">
@@ -26,20 +38,34 @@ export function AppShell({ title, active, children, flush = false }: Props) {
           <span>Hybrid IDP</span>
         </div>
         <ul className="nav">
-          <li className="nav-section">Workspace</li>
           <li>
             <Link href="/" className={active === "workspace" ? "active" : ""}>
-              <span className="nav-icon">▣</span>
+              <IconLayoutDashboard size={18} stroke={1.75} />
               <span>Document AI</span>
             </Link>
           </li>
-          {isAdmin && (
+
+          {isOps && (
             <>
-              <li className="nav-section">Operations</li>
+              <li className="nav-section">MONITORING</li>
               <li>
-                <Link href="/admin" className={active === "admin" ? "active" : ""}>
-                  <span className="nav-icon">⚙</span>
-                  <span>Admin</span>
+                <Link href="/ops/health" className={active === "health" ? "active" : ""}>
+                  <IconHeartbeat size={18} stroke={1.75} />
+                  <span>Health &amp; Metrics</span>
+                </Link>
+              </li>
+              <li>
+                <Link href="/ops/logs" className={active === "logs" ? "active" : ""}>
+                  <IconHistory size={18} stroke={1.75} />
+                  <span>Activity Logs</span>
+                </Link>
+              </li>
+
+              <li className="nav-section">AUDIT &amp; COMPLIANCE</li>
+              <li>
+                <Link href="/audit/trail" className={active === "audit" ? "active" : ""}>
+                  <IconReportSearch size={18} stroke={1.75} />
+                  <span>Audit Trail</span>
                 </Link>
               </li>
             </>

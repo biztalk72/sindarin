@@ -27,6 +27,14 @@ const STATUS_LABEL: Record<string, string> = {
   needs_reprocess: "재처리 필요",
 };
 
+// SecurityLevel labels — display only in GP1. Classification edit UI lands in GP3.
+const LEVEL_LABEL: Record<string, string> = {
+  public: "공개",
+  internal: "내부",
+  confidential: "기밀",
+  restricted: "비공개",
+};
+
 interface Props {
   documents: DocumentCard[];
   selected: Set<string>;
@@ -99,6 +107,9 @@ export function DocumentLibrary({ documents, selected, onToggle, onChanged }: Pr
                   <span className="doc-meta">
                     <span className={`status-badge status-${d.status}`}>
                       {STATUS_LABEL[d.status] ?? d.status}
+                    </span>
+                    <span className={`level-badge level-${d.security_level}`}>
+                      {LEVEL_LABEL[d.security_level] ?? d.security_level}
                     </span>
                     <span className="doc-chunks">{d.chunk_count} chunks</span>
                   </span>
