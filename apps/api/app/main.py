@@ -9,7 +9,7 @@ from fastapi import FastAPI
 
 from app.auth import ensure_bootstrap_admin
 from app.db import SessionLocal
-from app.routers import admin, auth, chat, documents, health, upload
+from app.routers import admin, auth, chat, documents, dsr, health, upload
 
 
 @contextlib.asynccontextmanager
@@ -32,6 +32,8 @@ app.include_router(chat.router, prefix="/api")
 app.include_router(upload.router, prefix="/api")
 app.include_router(documents.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(dsr.router, prefix="/api")
+app.include_router(dsr.admin_router, prefix="/api")
 
 # TODO (PRD2 §9, by epic):
 #   /api/upload, /api/documents[...]            E9 UI core / ingest
