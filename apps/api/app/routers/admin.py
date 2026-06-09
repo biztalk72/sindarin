@@ -10,12 +10,16 @@ from datetime import date as date_t, datetime
 from pathlib import Path
 from typing import Annotated, Any
 
-from db import AuditLog, Document, DocumentChunk, IngestionJob, User
-from fastapi import APIRouter, Depends, HTTPException, Query
+import datetime as dt
+import uuid
+
+from db import AuditLog, Document, DocumentChunk, GuardrailOverride, IngestionJob, User
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from app.auth import require_roles
+from app.auth import Principal, get_current_principal, require_roles
 from app.config import settings
 from app.db import get_session
 from app.rag import openai_configured
@@ -101,6 +105,123 @@ def admin_jobs(
         }
         for job, name in rows
     ]
+
+
+class OverrideCreate(BaseModel):
+    kind: str = Field(pattern="^(pii|injection)$")
+    policy_name: str = Field(min_length=1, max_length=128)
+    reason: str = Field(min_length=8, max_length=1000)  # 8+ chars enforces "say something useful"
+    ttl_minutes: int | None = Field(default=60, ge=1, le=60 * 24)
+
+
+def _override_dict(o: GuardrailOverride) -> dict[str, Any]:
+    now = dt.datetime.now(tz=dt.timezone.utc)
+    active = o.revoked_at is None and (o.expires_at is None or o.expires_at > now)
+    return {
+        "id": str(o.id),
+        "kind": o.kind,
+        "policy_name": o.policy_name,
+        "reason": o.reason,
+        "created_by": str(o.created_by),
+        "created_at": o.created_at.isoformat() if o.created_at else None,
+        "expires_at": o.expires_at.isoformat() if o.expires_at else None,
+        "revoked_at": o.revoked_at.isoformat() if o.revoked_at else None,
+        "revoked_by": str(o.revoked_by) if o.revoked_by else None,
+        "active": active,
+    }
+
+
+@router.get("/admin/guardrails/overrides")
+def admin_overrides_list(
+    session: Annotated[Session, Depends(get_session)],
+    limit: int = 50,
+    active_only: bool = False,
+) -> list[dict[str, Any]]:
+    q = select(GuardrailOverride).order_by(GuardrailOverride.created_at.desc()).limit(limit)
+    if active_only:
+        now = dt.datetime.now(tz=dt.timezone.utc)
+        q = q.where(
+            GuardrailOverride.revoked_at.is_(None),
+            (GuardrailOverride.expires_at.is_(None)) | (GuardrailOverride.expires_at > now),
+        )
+    rows = session.execute(q).scalars().all()
+    return [_override_dict(o) for o in rows]
+
+
+@router.post("/admin/guardrails/overrides")
+def admin_overrides_create(
+    body: Annotated[OverrideCreate, Body()],
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(get_current_principal)],
+) -> dict[str, Any]:
+    """Record an override intent. Audit-only in D1 — runtime apply lands in D1b."""
+    try:
+        actor = uuid.UUID(principal.sub)
+    except (ValueError, AttributeError) as exc:
+        raise HTTPException(status_code=400, detail="invalid actor") from exc
+    expires_at: dt.datetime | None = None
+    if body.ttl_minutes is not None:
+        expires_at = dt.datetime.now(tz=dt.timezone.utc) + dt.timedelta(minutes=body.ttl_minutes)
+    row = GuardrailOverride(
+        kind=body.kind,
+        policy_name=body.policy_name,
+        reason=body.reason,
+        created_by=actor,
+        expires_at=expires_at,
+    )
+    session.add(row)
+    # Also write the override intent into the audit log so it appears on the Audit Trail
+    # alongside chat.requests — single audit surface for any reviewer.
+    session.add(
+        AuditLog(
+            actor_id=actor,
+            action="guardrail.override.create",
+            kind="guardrail.override",
+            outcome="ok",
+            metrics={
+                "policy_kind": body.kind,
+                "policy_name": body.policy_name,
+                "ttl_minutes": body.ttl_minutes,
+                "reason_chars": len(body.reason),
+            },
+        )
+    )
+    session.commit()
+    session.refresh(row)
+    return _override_dict(row)
+
+
+@router.delete("/admin/guardrails/overrides/{override_id}")
+def admin_overrides_revoke(
+    override_id: str,
+    session: Annotated[Session, Depends(get_session)],
+    principal: Annotated[Principal, Depends(get_current_principal)],
+) -> dict[str, Any]:
+    try:
+        oid = uuid.UUID(override_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid override id") from exc
+    row = session.get(GuardrailOverride, oid)
+    if row is None:
+        raise HTTPException(status_code=404, detail="override not found")
+    if row.revoked_at is None:
+        row.revoked_at = dt.datetime.now(tz=dt.timezone.utc)
+        try:
+            row.revoked_by = uuid.UUID(principal.sub)
+        except (ValueError, AttributeError):
+            pass
+        session.add(
+            AuditLog(
+                actor_id=row.revoked_by,
+                action="guardrail.override.revoke",
+                kind="guardrail.override",
+                outcome="ok",
+                resource_id=row.id,
+            )
+        )
+        session.commit()
+        session.refresh(row)
+    return _override_dict(row)
 
 
 @router.get("/admin/guardrails/policies")

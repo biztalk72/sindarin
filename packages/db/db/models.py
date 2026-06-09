@@ -199,3 +199,24 @@ class EvalRun(Base):
     metric: Mapped[str] = mapped_column(String(64), nullable=False)
     score: Mapped[float] = mapped_column(Float, nullable=False)
     created_at: Mapped[dt.datetime] = created_at()
+
+
+class GuardrailOverride(Base):
+    """Admin override of a guardrail policy (GP4 / D1).
+
+    Audit-only in D1: chat path doesn't consult this table yet. D1b plugs active rows into
+    `rag_core.guardrails` so the bypass actually takes effect at runtime. Recording the
+    intent first keeps the audit trail complete regardless of when the apply side lands.
+    """
+
+    __tablename__ = "guardrail_overrides"
+
+    id: Mapped[uuid.UUID] = pk_uuid()
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)        # 'pii' | 'injection'
+    policy_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[dt.datetime] = created_at()
+    expires_at: Mapped[dt.datetime | None] = mapped_column(nullable=True)
+    revoked_at: Mapped[dt.datetime | None] = mapped_column(nullable=True)
+    revoked_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)

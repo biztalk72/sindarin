@@ -314,6 +314,48 @@ export interface EgressStatus {
 }
 export const getEgressStatus = () => getJson<EgressStatus>("/api/admin/compliance/egress");
 
+// GP4 — guardrail overrides (D1: audit-only — runtime apply lands in D1b)
+export interface GuardrailOverride {
+  id: string;
+  kind: "pii" | "injection";
+  policy_name: string;
+  reason: string;
+  created_by: string;
+  created_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  revoked_by: string | null;
+  active: boolean;
+}
+export const getOverrides = (activeOnly = false) =>
+  getJson<GuardrailOverride[]>(`/api/admin/guardrails/overrides?active_only=${activeOnly}`);
+export async function createOverride(body: {
+  kind: "pii" | "injection";
+  policy_name: string;
+  reason: string;
+  ttl_minutes?: number | null;
+}): Promise<GuardrailOverride> {
+  const res = await fetch("/api/admin/guardrails/overrides", {
+    method: "POST",
+    headers: { ...authHeaders({ "content-type": "application/json" }) },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let detail = `request failed (${res.status})`;
+    try { detail = (await res.json()).detail ?? detail; } catch { /* ignore */ }
+    throw new ApiError(res.status, detail);
+  }
+  return res.json();
+}
+export async function revokeOverride(id: string): Promise<GuardrailOverride> {
+  const res = await fetch(`/api/admin/guardrails/overrides/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new ApiError(res.status, `request failed (${res.status})`);
+  return res.json();
+}
+
 // Where a citation/TOC click wants to land in the preview.
 export interface PreviewTarget {
   documentId: string;
