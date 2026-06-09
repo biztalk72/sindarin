@@ -108,6 +108,11 @@ class OpenAIGenerator:
         resp = client.chat.completions.create(
             model=self.model,
             temperature=self._temperature,
+            # RAG answers are citation-bound and short; without a cap, vLLM defaults to
+            # `max_model_len - prompt_tokens` which on Qwen-14B/8k can mean thousands of
+            # tokens of output (and >40s wall-clock). 768 covers any reasonable cited answer
+            # while keeping p95 well under the upstream proxy timeout.
+            max_tokens=768,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
