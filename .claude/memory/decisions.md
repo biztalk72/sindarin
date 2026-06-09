@@ -305,3 +305,34 @@ present in `infra/compose/llm.yml` for future re-measurement, never auto-started
 
 See `docs/runbooks/nemotron-phase0.md` for the full Phase 0 trace and `/tmp/nemotron_phase0_compare.py`
 for the measurement script (to be promoted to `scripts/eval_compare.py` in Phase 1).
+
+**Phase 2 cutover (2026-06-09).** Operational `vllm-chat` recreated with
+`nvidia/Llama-3.1-Nemotron-Nano-8B-v1` (served-name `nemotron-nano-8b`),
+`VLLM_CHAT_GPU_UTIL` shrunk 0.45 → 0.30 to match the smaller weights. `apps/api`
+gained the `tokenizers>=0.20` dep; `RagPipeline` now takes optional `tokenizer` +
+`budget_tokens` (2000) — `pack_context` uses token budget when configured, glyph
+budget otherwise. `api.Dockerfile` pre-fetches the chat-model tokenizer at build time
+(ARG `CHAT_MODEL`, ~3–10 MB) so first-request latency stays clean. `audit_logs.metrics`
+now carries `model="nemotron-nano-8b"` on every chat row — Audit Trail diff vs the
+pre-cutover Qwen rows is one query.
+
+Cutover smoke (real RAG path through `:3200` proxy, no fake context):
+  EN "Which chat model is the platform using?"  → 11.08s, cites=1, ground=1.0
+  EN "What is the embedding dim?"               →  3.40s, cites=0 (dropped — single chunk
+                                                   doesn't carry the literal claim)
+  KO "한국어 지원을 한 문장으로 …"             → 17.62s, cites=0 (Nemotron-Nano-8B KO
+                                                   citation extraction is brittle even with
+                                                   guarded JSON; Phase 0's KO 7.30s p50 was
+                                                   on synthetic context).
+
+Net: the model swap is live, the trust layer is honest about misses (dropped =
+"no claim survived"), and the Audit Trail makes the diff queryable. Real-corpus KO
+quality is the main follow-up; candidates are (a) chunk-level Korean-specific cleanup,
+(b) wider context budget (bump `RAG_CONTEXT_TOKEN_BUDGET` 2000 → 3000), (c) a larger
+Nemotron variant (22B or 70B) — defer until we have a KO golden eval set rather than
+ad-hoc queries.
+
+Rollback path: revert `.env` (`ANSWER_MODEL=qwen2.5-14b`, `CHAT_MODEL=Qwen/Qwen2.5-14B-Instruct`,
+`VLLM_CHAT_GPU_UTIL=0.45`), `docker compose ... up -d --force-recreate vllm-chat api`.
+Qwen weights still sit in `hybrid-idp_hf-cache` from the pre-cutover state, so the
+rollback is ~3-minute warm.
