@@ -347,6 +347,47 @@ export async function createOverride(body: {
   }
   return res.json();
 }
+// GP4 D2 — Data-subject requests
+export interface DsrRow {
+  id: string;
+  kind: "export" | "forget";
+  status: "pending" | "processing" | "completed" | "rejected";
+  requester_id: string;
+  scope: Record<string, unknown> | null;
+  created_at: string | null;
+  processed_at: string | null;
+  processed_by: string | null;
+  result: Record<string, unknown> | null;
+}
+
+export const getMyDsr = () => getJson<DsrRow[]>("/api/dsr/me");
+
+export async function createDsr(kind: "export" | "forget"): Promise<DsrRow> {
+  const res = await fetch("/api/dsr", {
+    method: "POST",
+    headers: { ...authHeaders({ "content-type": "application/json" }) },
+    body: JSON.stringify({ kind }),
+  });
+  if (!res.ok) throw new ApiError(res.status, `request failed (${res.status})`);
+  return res.json();
+}
+
+export const getAdminDsr = (status?: string) =>
+  getJson<DsrRow[]>(`/api/admin/dsr${status ? `?status=${status}` : ""}`);
+
+export async function processDsr(id: string): Promise<DsrRow> {
+  const res = await fetch(`/api/admin/dsr/${id}/process`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    let detail = `request failed (${res.status})`;
+    try { detail = (await res.json()).detail ?? detail; } catch { /* ignore */ }
+    throw new ApiError(res.status, detail);
+  }
+  return res.json();
+}
+
 export async function revokeOverride(id: string): Promise<GuardrailOverride> {
   const res = await fetch(`/api/admin/guardrails/overrides/${id}`, {
     method: "DELETE",

@@ -8,6 +8,7 @@ import {
   IconLayoutDashboard,
   IconReportSearch,
   IconShield,
+  IconUserCheck,
 } from "@tabler/icons-react";
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
@@ -26,7 +27,8 @@ export type ShellRoute =
   | "logs"
   | "guardrails"
   | "docs-acl"
-  | "audit";
+  | "audit"
+  | "dsr";
 
 interface Props {
   title: string;
@@ -111,6 +113,12 @@ export function AppShell({ title, active, children, flush = false }: Props) {
                 <Link href="/audit/trail" className={active === "audit" ? "active" : ""}>
                   <IconReportSearch size={18} stroke={1.75} />
                   <span>Audit Trail</span>
+                </Link>
+              </li>
+              <li>
+                <Link href="/audit/dsr" className={active === "dsr" ? "active" : ""}>
+                  <IconUserCheck size={18} stroke={1.75} />
+                  <span>DSR Requests</span>
                 </Link>
               </li>
             </>

@@ -201,6 +201,24 @@ class EvalRun(Base):
     created_at: Mapped[dt.datetime] = created_at()
 
 
+class DsrRequest(Base):
+    """Data-subject request (GP4 / D2). `kind`: 'export' (user pulls their data) or
+    'forget' (user asks to be erased). `status`: pending → processing → completed | rejected.
+    The export bundle / forget summary lands in `result` JSONB when admin processes it."""
+
+    __tablename__ = "dsr_requests"
+
+    id: Mapped[uuid.UUID] = pk_uuid()
+    requester_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)         # 'export' | 'forget'
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    scope: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[dt.datetime] = created_at()
+    processed_at: Mapped[dt.datetime | None] = mapped_column(nullable=True)
+    processed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+
+
 class GuardrailOverride(Base):
     """Admin override of a guardrail policy (GP4 / D1).
 

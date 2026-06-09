@@ -20,6 +20,7 @@ from db.models import (
     DocumentKeyword,
     DocumentTable,
     DocumentVersion,
+    DsrRequest,
     EvalRun,
     GuardrailOverride,
     IngestionJob,
@@ -43,4 +44,5 @@ __all__ = [
     "AuditLog",
     "EvalRun",
     "GuardrailOverride",
+    "DsrRequest",
 ]
