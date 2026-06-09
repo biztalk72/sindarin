@@ -36,6 +36,11 @@ class Document(Base):
     owner_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     security_level: Mapped[str] = mapped_column(String(32), nullable=False)  # SecurityLevel
     status: Mapped[str] = mapped_column(String(32), nullable=False)  # IngestionStage
+    # GP1 classification/retention metadata (UI surfaces in InsightPanel "권한·ACL" tab;
+    # actual classification + retention workflows land in GP3).
+    classified_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    classified_at: Mapped[dt.datetime | None] = mapped_column(nullable=True)
+    retention_until: Mapped[dt.datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[dt.datetime] = created_at()
 
     versions: Mapped[list[DocumentVersion]] = relationship(back_populates="document")
@@ -175,6 +180,14 @@ class AuditLog(Base):
     action: Mapped[str] = mapped_column(String(128), nullable=False)
     resource_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
     payload_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # GP1 observability boost. event_id is the shared key with the daily file log (GP2);
+    # null on rows created before GP1. metrics carries the per-event payload that the
+    # Admin/Audit UI surfaces (duration, model, groundedness, guardrail counts).
+    event_id: Mapped[str | None] = mapped_column(String(26), nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    kind: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    outcome: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    metrics: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[dt.datetime] = created_at()
 
 
