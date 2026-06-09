@@ -26,6 +26,10 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/api.Dockerfile
+      args:
+        # Tokenizer pre-fetch in the image — must match `.env` CHAT_MODEL (HF ID, not the
+        # served-model-name). Changing the chat model only requires a rebuild of `api`.
+        CHAT_MODEL: ${CHAT_MODEL:-nvidia/Llama-3.1-Nemotron-Nano-8B-v1}
     ports: ["${API_PORT:-8000}:8000"]
     env_file: ../../.env
     depends_on: [postgres, object-store, vector-db]

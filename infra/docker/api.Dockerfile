@@ -17,6 +17,17 @@ COPY infra/migrations ./infra/migrations
 # Install only the api package + its (workspace + external) deps into /srv/.venv.
 RUN uv sync --frozen --no-dev --package hybrid-idp-api
 
+# Pre-fetch the chat-model tokenizer (ADR-0011 Phase 2: token-aware pack_context). This
+# is a tiny tokenizer.json (~3–10 MB) — NOT the model weights, which vLLM serves separately.
+# Build-time fetch means /api/chat's first request stays fast instead of paying a one-time
+# HuggingFace download. CHAT_MODEL is a build-arg so swapping models doesn't require a
+# Dockerfile change.
+ARG CHAT_MODEL=nvidia/Llama-3.1-Nemotron-Nano-8B-v1
+ENV CHAT_MODEL=${CHAT_MODEL}
+RUN uv run --no-dev --package hybrid-idp-api python -c \
+    "from tokenizers import Tokenizer; Tokenizer.from_pretrained('${CHAT_MODEL}')" \
+    || echo "tokenizer prefetch failed for ${CHAT_MODEL} — first request will retry"
+
 EXPOSE 8000
 # Self-migrating: apply schema (alembic) then serve. DATABASE_URL is built from the
 # in-container POSTGRES_* so migrations hit the compose-network DB; the app lifespan then
