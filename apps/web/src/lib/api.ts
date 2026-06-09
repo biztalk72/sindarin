@@ -314,6 +314,29 @@ export interface EgressStatus {
 }
 export const getEgressStatus = () => getJson<EgressStatus>("/api/admin/compliance/egress");
 
+// GP4 D3 — Compliance summary (CSV download is a direct anchor, not a typed call)
+export interface ComplianceSummary {
+  window: { from: string; to: string };
+  total_events: number;
+  by_kind: Record<string, number>;
+  by_outcome: Record<string, number>;
+  by_model: Record<string, number>;
+  guardrails_hits_total: { input_pii: number; injection_removed: number; output_pii: number };
+  chat: {
+    cited_count: number;
+    dropped_count: number;
+    p50_ms: number | null;
+    p95_ms: number | null;
+  };
+}
+export const getComplianceSummary = (from?: string, to?: string) => {
+  const params = new URLSearchParams();
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  const qs = params.toString();
+  return getJson<ComplianceSummary>(`/api/admin/compliance/summary${qs ? `?${qs}` : ""}`);
+};
+
 // GP4 — guardrail overrides (D1: audit-only — runtime apply lands in D1b)
 export interface GuardrailOverride {
   id: string;
