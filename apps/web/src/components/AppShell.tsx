@@ -2,6 +2,7 @@
 
 import {
   IconAlertTriangle,
+  IconChartBar,
   IconFileText,
   IconHeartbeat,
   IconHistory,
@@ -28,7 +29,8 @@ export type ShellRoute =
   | "guardrails"
   | "docs-acl"
   | "audit"
-  | "dsr";
+  | "dsr"
+  | "compliance";
 
 interface Props {
   title: string;
@@ -119,6 +121,12 @@ export function AppShell({ title, active, children, flush = false }: Props) {
                 <Link href="/audit/dsr" className={active === "dsr" ? "active" : ""}>
                   <IconUserCheck size={18} stroke={1.75} />
                   <span>DSR Requests</span>
+                </Link>
+              </li>
+              <li>
+                <Link href="/audit/compliance" className={active === "compliance" ? "active" : ""}>
+                  <IconChartBar size={18} stroke={1.75} />
+                  <span>Compliance Report</span>
                 </Link>
               </li>
             </>

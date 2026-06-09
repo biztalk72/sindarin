@@ -283,6 +283,154 @@ def admin_guardrails_events(
     return out
 
 
+@router.get("/admin/compliance/summary")
+def admin_compliance_summary(
+    session: Annotated[Session, Depends(get_session)],
+    from_date: Annotated[str | None, Query(alias="from")] = None,
+    to_date: Annotated[str | None, Query(alias="to")] = None,
+) -> dict[str, Any]:
+    """Aggregate counters for the Compliance Report card (GP4 D3).
+
+    Time window defaults to last 30 days. `from` / `to` are ISO YYYY-MM-DD; both inclusive.
+    Returns scalar counts + outcome / model / kind histograms — same numbers the CSV export
+    serialises row-by-row.
+    """
+    end = dt.datetime.fromisoformat(to_date) if to_date else dt.datetime.now(tz=dt.timezone.utc)
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=dt.timezone.utc)
+    start = (
+        dt.datetime.fromisoformat(from_date) if from_date else end - dt.timedelta(days=30)
+    )
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=dt.timezone.utc)
+
+    rows = session.execute(
+        select(AuditLog).where(AuditLog.created_at >= start, AuditLog.created_at <= end)
+    ).scalars().all()
+
+    by_kind: dict[str, int] = {}
+    by_outcome: dict[str, int] = {}
+    by_model: dict[str, int] = {}
+    guardrail_total = {"input_pii": 0, "injection_removed": 0, "output_pii": 0}
+    durations: list[int] = []
+    cited = 0
+    dropped = 0
+
+    for r in rows:
+        k = r.kind or r.action or "unknown"
+        by_kind[k] = by_kind.get(k, 0) + 1
+        if r.outcome:
+            by_outcome[r.outcome] = by_outcome.get(r.outcome, 0) + 1
+        m = (r.metrics or {}).get("model")
+        if isinstance(m, str):
+            by_model[m] = by_model.get(m, 0) + 1
+        g = (r.metrics or {}).get("guardrails")
+        if isinstance(g, dict):
+            for key in guardrail_total:
+                v = g.get(key, 0)
+                if isinstance(v, (int, float)):
+                    guardrail_total[key] += int(v)
+        d = (r.metrics or {}).get("duration_ms")
+        if isinstance(d, (int, float)):
+            durations.append(int(d))
+        cs = (r.metrics or {}).get("claims_supported")
+        if isinstance(cs, (int, float)):
+            if cs > 0:
+                cited += 1
+            elif r.outcome == "dropped":
+                dropped += 1
+
+    durations.sort()
+    n = len(durations)
+    p50 = durations[n // 2] if n else None
+    p95 = durations[int(n * 0.95)] if n else None
+
+    return {
+        "window": {"from": start.isoformat(), "to": end.isoformat()},
+        "total_events": len(rows),
+        "by_kind": by_kind,
+        "by_outcome": by_outcome,
+        "by_model": by_model,
+        "guardrails_hits_total": guardrail_total,
+        "chat": {"cited_count": cited, "dropped_count": dropped, "p50_ms": p50, "p95_ms": p95},
+    }
+
+
+@router.get("/admin/compliance/audit.csv")
+def admin_compliance_csv(
+    session: Annotated[Session, Depends(get_session)],
+    from_date: Annotated[str | None, Query(alias="from")] = None,
+    to_date: Annotated[str | None, Query(alias="to")] = None,
+):  # FastAPI handles Response streaming via fastapi.responses
+    """CSV export of audit_logs over the given window. One row per AuditLog row.
+
+    Note: returns text/csv with the GP1 observability columns. PDF export with charts
+    is a follow-up that needs a heavier dep (reportlab / weasyprint) — explicitly deferred.
+    """
+    from fastapi.responses import StreamingResponse
+    import csv
+    import io
+
+    end = dt.datetime.fromisoformat(to_date) if to_date else dt.datetime.now(tz=dt.timezone.utc)
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=dt.timezone.utc)
+    start = (
+        dt.datetime.fromisoformat(from_date) if from_date else end - dt.timedelta(days=30)
+    )
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=dt.timezone.utc)
+
+    rows = session.execute(
+        select(AuditLog)
+        .where(AuditLog.created_at >= start, AuditLog.created_at <= end)
+        .order_by(AuditLog.created_at)
+    ).scalars().all()
+
+    def gen():
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow([
+            "created_at", "event_id", "trace_id", "kind", "action", "outcome",
+            "actor_id", "resource_id",
+            "duration_ms", "model", "language", "claims_supported", "groundedness",
+            "input_pii", "injection_removed", "output_pii", "warnings",
+        ])
+        yield buf.getvalue(); buf.seek(0); buf.truncate(0)
+
+        for r in rows:
+            m = r.metrics or {}
+            g = m.get("guardrails") or {}
+            w.writerow([
+                r.created_at.isoformat() if r.created_at else "",
+                r.event_id or "",
+                r.trace_id or "",
+                r.kind or "",
+                r.action or "",
+                r.outcome or "",
+                str(r.actor_id) if r.actor_id else "",
+                str(r.resource_id) if r.resource_id else "",
+                m.get("duration_ms", ""),
+                m.get("model", ""),
+                m.get("language", ""),
+                m.get("claims_supported", ""),
+                m.get("groundedness", ""),
+                g.get("input_pii", "") if isinstance(g, dict) else "",
+                g.get("injection_removed", "") if isinstance(g, dict) else "",
+                g.get("output_pii", "") if isinstance(g, dict) else "",
+                "|".join(m.get("warnings") or []) if isinstance(m.get("warnings"), list) else "",
+            ])
+            yield buf.getvalue()
+            buf.seek(0)
+            buf.truncate(0)
+
+    fname = f"compliance-{start.date().isoformat()}-to-{end.date().isoformat()}.csv"
+    return StreamingResponse(
+        gen(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
 @router.get("/admin/compliance/egress")
 def admin_compliance_egress() -> dict[str, Any]:
     """External-egress sentinel (GP3). The platform invariant is "no data leaves the node"
