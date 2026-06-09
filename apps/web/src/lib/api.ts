@@ -287,6 +287,33 @@ export const getLogDates = () => getJson<string[]>("/api/admin/logs/files");
 export const getLogByDate = (date: string, limit = 500) =>
   getJson<LogEvent[]>(`/api/admin/logs/by-date?date=${date}&limit=${limit}`);
 
+// GP3 — guardrails read-only inventory + recent activity
+export interface GuardrailPolicies {
+  pii: Array<{ name: string; pattern: string }>;
+  injection: Array<{ pattern: string }>;
+}
+export interface GuardrailEvent {
+  event_id: string | null;
+  trace_id: string | null;
+  actor_id: string | null;
+  created_at: string | null;
+  input_pii: number;
+  injection_removed: number;
+  output_pii: number;
+}
+export const getGuardrailPolicies = () =>
+  getJson<GuardrailPolicies>("/api/admin/guardrails/policies");
+export const getGuardrailEvents = (limit = 50) =>
+  getJson<GuardrailEvent[]>(`/api/admin/guardrails/events?limit=${limit}`);
+
+// GP3 — external-egress sentinel
+export interface EgressStatus {
+  external: boolean;
+  chat: { url: string; in_network: boolean };
+  embed: { url: string; in_network: boolean };
+}
+export const getEgressStatus = () => getJson<EgressStatus>("/api/admin/compliance/egress");
+
 // Where a citation/TOC click wants to land in the preview.
 export interface PreviewTarget {
   documentId: string;

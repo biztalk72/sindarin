@@ -103,6 +103,87 @@ def admin_jobs(
     ]
 
 
+@router.get("/admin/guardrails/policies")
+def admin_guardrails_policies() -> dict[str, Any]:
+    """Read-only inventory of active guardrail patterns (GP3). Code-loaded today; the GP4
+    DB-loaded policies story replaces this body but the contract stays stable."""
+    from rag_core import list_injection_policies, list_pii_policies
+
+    return {
+        "pii": list_pii_policies(),
+        "injection": list_injection_policies(),
+    }
+
+
+@router.get("/admin/guardrails/events")
+def admin_guardrails_events(
+    session: Annotated[Session, Depends(get_session)],
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Recent guardrail activity surfaced from audit_logs.metrics.guardrails (GP3).
+
+    No new table yet — we project from existing observability. A future GP4 will move the
+    raw events into a dedicated `guardrail_events` row when override / approval workflows
+    need them as first-class records.
+    """
+    rows = (
+        session.execute(
+            select(AuditLog)
+            .where(AuditLog.kind == "chat.request")
+            .order_by(AuditLog.created_at.desc())
+            .limit(limit * 4)  # over-fetch then filter — most rows have zero hits
+        )
+        .scalars()
+        .all()
+    )
+    out: list[dict[str, Any]] = []
+    for a in rows:
+        g = (a.metrics or {}).get("guardrails") if a.metrics else None
+        if not isinstance(g, dict):
+            continue
+        hits = (
+            int(g.get("input_pii", 0) or 0)
+            + int(g.get("injection_removed", 0) or 0)
+            + int(g.get("output_pii", 0) or 0)
+        )
+        if hits == 0:
+            continue
+        out.append({
+            "event_id": a.event_id,
+            "trace_id": a.trace_id,
+            "actor_id": str(a.actor_id) if a.actor_id else None,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+            "input_pii": int(g.get("input_pii", 0) or 0),
+            "injection_removed": int(g.get("injection_removed", 0) or 0),
+            "output_pii": int(g.get("output_pii", 0) or 0),
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
+@router.get("/admin/compliance/egress")
+def admin_compliance_egress() -> dict[str, Any]:
+    """External-egress sentinel (GP3). The platform invariant is "no data leaves the node"
+    (`docs/runbooks/go-live.md` Option B); this surfaces whether the live model base URLs
+    point inside the GB10 compose network or not. Visible to anyone admin via a top-bar
+    banner when `external=true`."""
+    chat_url = settings.openai_base_url or ""
+    embed_url = settings.embedding_base_url or chat_url
+    # In-network URLs look like http://vllm-chat:8000/v1 — non-routable hostname starts with
+    # the service name. External URLs typically resolve to a public domain.
+    def _is_in_network(u: str) -> bool:
+        return any(host in u for host in ("vllm-chat", "vllm-embed", "localhost", "127.0.0.1"))
+
+    chat_in = _is_in_network(chat_url)
+    embed_in = _is_in_network(embed_url)
+    return {
+        "external": not (chat_in and embed_in),
+        "chat":  {"url": chat_url,  "in_network": chat_in},
+        "embed": {"url": embed_url, "in_network": embed_in},
+    }
+
+
 @router.get("/admin/logs/files")
 def admin_logs_files() -> list[str]:
     """Available daily-overlap log files (GP2). Returns dates, newest first."""

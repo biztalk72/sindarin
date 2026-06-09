@@ -1,22 +1,32 @@
 "use client";
 
 import {
+  IconAlertTriangle,
+  IconFileText,
   IconHeartbeat,
   IconHistory,
   IconLayoutDashboard,
   IconReportSearch,
+  IconShield,
 } from "@tabler/icons-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { useSession } from "@/components/SessionContext";
+import { type EgressStatus, getEgressStatus } from "@/lib/api";
 
-// Sidebar groups (PRD2 §8.1 IA + IA-v2 grouping):
-//   MAIN            — Workspace, everyone
-//   MONITORING      — Health & Metrics, Activity Logs (admin / auditor)
-//   AUDIT & COMPLIANCE — Audit Trail (admin / auditor)
-// GUARDRAILS & POLICY group lands in GP3; not rendered in GP1 to avoid an empty header.
-export type ShellRoute = "workspace" | "health" | "logs" | "audit";
+// Sidebar groups (IA v2):
+//   MAIN                  — Workspace, everyone
+//   MONITORING            — Health & Metrics, Activity Logs (admin / auditor)
+//   GUARDRAILS & POLICY   — Guardrails (read-only), Documents & ACL (read-only) — GP3
+//   AUDIT & COMPLIANCE    — Audit Trail (admin / auditor)
+export type ShellRoute =
+  | "workspace"
+  | "health"
+  | "logs"
+  | "guardrails"
+  | "docs-acl"
+  | "audit";
 
 interface Props {
   title: string;
@@ -26,9 +36,30 @@ interface Props {
   flush?: boolean;
 }
 
+function EgressBanner({ status }: { status: EgressStatus }) {
+  if (!status.external) return null;
+  return (
+    <div className="egress-banner" role="alert">
+      <IconAlertTriangle size={16} stroke={2} />
+      <span>
+        <strong>External egress detected.</strong>{" "}
+        chat={status.chat.url} {status.chat.in_network ? "(in-net)" : "(external)"} ·{" "}
+        embed={status.embed.url} {status.embed.in_network ? "(in-net)" : "(external)"} —
+        PRD2 self-hosted invariant violated. Review `.env` model URLs.
+      </span>
+    </div>
+  );
+}
+
 export function AppShell({ title, active, children, flush = false }: Props) {
   const { role, email, logout } = useSession();
   const isOps = role === "admin" || role === "auditor";
+
+  const [egress, setEgress] = useState<EgressStatus | null>(null);
+  useEffect(() => {
+    if (!isOps) return;
+    getEgressStatus().then(setEgress).catch(() => setEgress(null));
+  }, [isOps]);
 
   return (
     <div className="app-shell">
@@ -61,6 +92,20 @@ export function AppShell({ title, active, children, flush = false }: Props) {
                 </Link>
               </li>
 
+              <li className="nav-section">GUARDRAILS &amp; POLICY</li>
+              <li>
+                <Link href="/policy/guardrails" className={active === "guardrails" ? "active" : ""}>
+                  <IconShield size={18} stroke={1.75} />
+                  <span>Guardrails</span>
+                </Link>
+              </li>
+              <li>
+                <Link href="/policy/documents" className={active === "docs-acl" ? "active" : ""}>
+                  <IconFileText size={18} stroke={1.75} />
+                  <span>Documents &amp; ACL</span>
+                </Link>
+              </li>
+
               <li className="nav-section">AUDIT &amp; COMPLIANCE</li>
               <li>
                 <Link href="/audit/trail" className={active === "audit" ? "active" : ""}>
@@ -86,6 +131,8 @@ export function AppShell({ title, active, children, flush = false }: Props) {
             </button>
           </div>
         </header>
+
+        {isOps && egress && <EgressBanner status={egress} />}
 
         {flush ? children : <div className="app-body">{children}</div>}
       </main>

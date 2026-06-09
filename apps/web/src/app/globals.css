@@ -579,6 +579,21 @@ h1, h2, h3, h4, h5 {
 .level-internal     { background: #dbeafe; color: #1e40af; }
 .level-confidential { background: #fef3c7; color: #92400e; }
 .level-restricted   { background: #fee2e2; color: #991b1b; }
+
+/* GP3 — egress sentinel banner. Sticky alert row under the topbar, visible to admin+auditor
+   whenever the configured chat/embed endpoints are not in the GB10 compose network. */
+.egress-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 24px;
+  background: #fef3c7;
+  color: #92400e;
+  border-bottom: 1px solid #fde68a;
+  font-size: 13px;
+  font-weight: 500;
+}
+.egress-banner strong { font-weight: 700; }
 .doc-chunks {
   font-size: 11px;
   color: var(--muted);

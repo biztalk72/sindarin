@@ -42,6 +42,16 @@ class PiiMatch:
     value: str
 
 
+def list_pii_policies() -> list[dict[str, str]]:
+    """Public read view of the PII patterns — admin Guardrails page (GP3 read-only)."""
+    return [{"name": name, "pattern": pat.pattern} for name, pat in _PII_PATTERNS]
+
+
+def list_injection_policies() -> list[dict[str, str]]:
+    """Public read view of the injection patterns — admin Guardrails page (GP3 read-only)."""
+    return [{"pattern": pat.pattern} for pat in _INJECTION_PATTERNS]
+
+
 def detect_pii(text: str) -> list[PiiMatch]:
     found: list[PiiMatch] = []
     for kind, pat in _PII_PATTERNS:
