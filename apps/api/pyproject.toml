@@ -11,6 +11,7 @@ dependencies = [
   "pyjwt>=2.9",                # single-org JWT (ADR-0005)
   "alembic>=1.13",             # schema migrations on container startup (self-migrating)
   "openai>=1.40",              # OpenAI-compatible client only (ADR-0001)
+  "tokenizers>=0.20",          # token-aware pack_context (ADR-0011 / Phase 2)
   "document-ir",
   "rag-core",
   "hybrid-idp-shared",

@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_base_url: str = "http://localhost:8080/v1"
     answer_model: str = "default-answer"
+    # HuggingFace model ID — used only by the tokenizer-aware context budget (ADR-0011 /
+    # Phase 2). Distinct from `answer_model` (the vLLM served-model-name). Left empty
+    # disables token-aware packing (falls back to glyph budget).
+    chat_model: str = ""
+    # Token budget for `pack_context` when a tokenizer is available. ≈ 2000 tokens covers
+    # the same retrieval fan-out the 6000-char glyph budget did on Qwen, with headroom
+    # for the system prompt (~200 tok) and the 768 max_tokens cap.
+    rag_context_token_budget: int = 2000
     embedding_model: str = ""
     embedding_base_url: str = ""  # falls back to openai_base_url
     embedding_dim: int = 1536

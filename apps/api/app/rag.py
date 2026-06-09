@@ -9,6 +9,10 @@ until an endpoint is set (and documents ingested) the route stays an honest 503.
 
 from __future__ import annotations
 
+import logging
+from functools import lru_cache
+from typing import Any
+
 from rag_core import (
     Authorizer,
     BM25Index,
@@ -30,6 +34,29 @@ from app.config import Settings, settings
 _DEV_DIM = 64
 _DEV_EMBED_MODEL = "deterministic-bow"
 _EMBED_VERSION = "v1"
+
+
+@lru_cache(maxsize=4)
+def _get_tokenizer(model_id: str) -> Any | None:
+    """Lazy, cached chat-model tokenizer for token-aware ``pack_context`` (ADR-0011).
+
+    Returns ``None`` if `tokenizers` isn't available or the model id can't be resolved —
+    callers must treat None as "skip token budgeting, use the glyph fallback". The
+    api.Dockerfile pre-fetches the configured model so the first request stays fast.
+    """
+    if not model_id:
+        return None
+    try:
+        from tokenizers import Tokenizer
+    except ImportError:  # `tokenizers` not installed → glyph fallback
+        return None
+    try:
+        return Tokenizer.from_pretrained(model_id)
+    except Exception as exc:  # noqa: BLE001 — network/auth/missing tokenizer.json all OK to silence
+        logging.getLogger(__name__).warning(
+            "tokenizer load failed for %s (%s); falling back to glyph budget", model_id, exc,
+        )
+        return None
 
 
 def openai_configured(s: Settings = settings) -> bool:
@@ -90,6 +117,7 @@ def build_pipeline(
     gen_client: object | None = None,
 ) -> RagPipeline:
     """Assemble a pipeline from a given corpus/bm25/authorizer (OpenAI or dev components)."""
+    tokenizer = _get_tokenizer(s.chat_model) if s.chat_model else None
     return RagPipeline(
         embedder=select_embedder(s, client=embed_client),
         store=QdrantVectorStore(url=s.vector_db_url),
@@ -98,6 +126,8 @@ def build_pipeline(
         authorizer=authorizer,
         generator=select_generator(s, client=gen_client),
         collection=s.vector_collection,
+        tokenizer=tokenizer,
+        budget_tokens=s.rag_context_token_budget if tokenizer is not None else None,
     )
 
 
@@ -107,6 +137,7 @@ def build_pipeline_from_db(session: Session, s: Settings = settings) -> RagPipel
     from app.repository import PostgresAuthorizer, build_bm25, load_corpus
 
     corpus = load_corpus(session)
+    tokenizer = _get_tokenizer(s.chat_model) if s.chat_model else None
     return RagPipeline(
         embedder=select_embedder(s),
         store=QdrantVectorStore(url=s.vector_db_url),
@@ -115,4 +146,6 @@ def build_pipeline_from_db(session: Session, s: Settings = settings) -> RagPipel
         authorizer=PostgresAuthorizer(session),
         generator=select_generator(s),
         collection=s.vector_collection,
+        tokenizer=tokenizer,
+        budget_tokens=s.rag_context_token_budget if tokenizer is not None else None,
     )

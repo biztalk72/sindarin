@@ -63,23 +63,49 @@ class ChatResult:
     guardrails: dict[str, Any] = field(default_factory=dict)  # ADR-0006 audit signal
 
 
-def pack_context(candidates: list[Candidate], *, budget_chars: int = 6000) -> list[Candidate]:
+def pack_context(
+    candidates: list[Candidate],
+    *,
+    budget_chars: int = 6000,
+    budget_tokens: int | None = None,
+    tokenizer: Any = None,
+) -> list[Candidate]:
     """Dedup by chunk and cap by budget, **preserving relevance order**.
 
     Relevance order is kept so the budget retains the most relevant chunks and downstream
     claim selection is deterministic. Per-document/page reading-order assembly (for the LLM
     prompt string) is a presentation concern handled at prompt-build time, not here.
+
+    Two budget modes:
+      - **glyph budget** (default, ``budget_chars``) — fast, deterministic, no deps.
+        Adequate when prompt tokens are bounded by trust + max_tokens caps elsewhere.
+      - **token budget** (``budget_tokens`` + ``tokenizer``) — Llama-3.1's Hangul
+        inefficiency vs Qwen's BPE made the glyph budget unreliable across models;
+        token-aware packing recovers the KO p50 gap (ADR-0011 / Phase 2). ``tokenizer``
+        is duck-typed: needs ``.encode(text)`` returning an object with ``.ids``
+        (HuggingFace ``tokenizers.Tokenizer``) or a list (``transformers`` slow path).
+        If both are set, token budget wins.
     """
     seen: set[str] = set()
     packed: list[Candidate] = []
     used = 0
+
+    def _count(text: str) -> int:
+        if budget_tokens is not None and tokenizer is not None:
+            enc = tokenizer.encode(text)
+            ids = getattr(enc, "ids", None)
+            return len(ids) if ids is not None else len(enc)
+        return len(text)
+
+    limit = budget_tokens if (budget_tokens is not None and tokenizer is not None) else budget_chars
+
     for c in candidates:
         if c.record.chunk_id in seen:
             continue
         seen.add(c.record.chunk_id)
-        used += len(c.record.text)
+        used += _count(c.record.text)
         packed.append(c)
-        if used >= budget_chars:
+        if used >= limit:
             break
     return packed
 
@@ -93,6 +119,11 @@ class RagPipeline:
     authorizer: Authorizer
     generator: Generator
     collection: str = "documents"
+    # Optional token-aware context budgeting (ADR-0011 / Phase 2). When provided, packing
+    # uses ``budget_tokens`` against ``tokenizer.encode`` instead of glyph count. Built by
+    # ``apps/api/app/rag.py`` from the chat model's HF tokenizer when configured.
+    tokenizer: Any = None
+    budget_tokens: int | None = None
 
     def answer(
         self,
@@ -138,7 +169,12 @@ class RagPipeline:
                 model=model,
             )
 
-        packed = pack_context(candidates, budget_chars=6000)
+        packed = pack_context(
+            candidates,
+            budget_chars=6000,
+            budget_tokens=self.budget_tokens,
+            tokenizer=self.tokenizer,
+        )
 
         # Guardrails — input scan + strip injected instructions from document context before
         # it reaches the model (ADR-0006, PRD2 §7.1). Citations still use the original corpus.
