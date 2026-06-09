@@ -21,6 +21,7 @@ from db.models import (
     DocumentTable,
     DocumentVersion,
     EvalRun,
+    GuardrailOverride,
     IngestionJob,
     KeywordEdge,
     User,
@@ -41,4 +42,5 @@ __all__ = [
     "AclEntry",
     "AuditLog",
     "EvalRun",
+    "GuardrailOverride",
 ]
