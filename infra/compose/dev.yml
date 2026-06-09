@@ -32,6 +32,9 @@ services:
         CHAT_MODEL: ${CHAT_MODEL:-nvidia/Llama-3.1-Nemotron-Nano-8B-v1}
     ports: ["${API_PORT:-8000}:8000"]
     env_file: ../../.env
+    # GP2 daily-overlap activity logs (apps/api/app/event_log.py). Host mount so files
+    # survive container recreate and operators can grep them directly.
+    volumes: ["../../logs:/srv/var/log/hybrid-idp"]
     depends_on: [postgres, object-store, vector-db]
     restart: unless-stopped
 

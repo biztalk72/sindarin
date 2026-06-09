@@ -37,3 +37,4 @@ out/
 apps/web/.claude/
 **/.claude/sessions/
 **/.claude/state/
+logs/
