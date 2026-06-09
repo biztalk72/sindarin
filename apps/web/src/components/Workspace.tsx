@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { AppShell } from "@/components/AppShell";
 import ChatWorkspace from "@/components/ChatWorkspace";
 import { DocumentLibrary } from "@/components/DocumentLibrary";
 import { InsightPanel } from "@/components/InsightPanel";
@@ -35,27 +36,29 @@ export default function Workspace() {
   }, []);
 
   return (
-    <div className="workspace">
-      <aside className="pane left" aria-label="document library">
-        <DocumentLibrary
-          documents={documents}
-          selected={selected}
-          onToggle={toggle}
-          onChanged={refresh}
-        />
-      </aside>
+    <AppShell title="Document AI workspace" active="workspace" flush>
+      <div className="workspace">
+        <aside className="pane left" aria-label="document library">
+          <DocumentLibrary
+            documents={documents}
+            selected={selected}
+            onToggle={toggle}
+            onChanged={refresh}
+          />
+        </aside>
 
-      <section className="pane center" aria-label="chat workspace">
-        <ChatWorkspace scopeDocumentIds={[...selected]} onOpenPreview={setPreview} />
-        {preview && <PreviewPane target={preview} onClose={() => setPreview(null)} />}
-      </section>
+        <section className="pane center" aria-label="chat workspace">
+          <ChatWorkspace scopeDocumentIds={[...selected]} onOpenPreview={setPreview} />
+          {preview && <PreviewPane target={preview} onClose={() => setPreview(null)} />}
+        </section>
 
-      <aside className="pane right" aria-label="document insight">
-        <InsightPanel
-          documentId={selected.size === 1 ? [...selected][0] : null}
-          onOpenPreview={setPreview}
-        />
-      </aside>
-    </div>
+        <aside className="pane right" aria-label="document insight">
+          <InsightPanel
+            documentId={selected.size === 1 ? [...selected][0] : null}
+            onOpenPreview={setPreview}
+          />
+        </aside>
+      </div>
+    </AppShell>
   );
 }

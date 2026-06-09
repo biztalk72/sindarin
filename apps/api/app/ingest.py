@@ -32,6 +32,13 @@ def _acl_hash(principals: set[str]) -> str:
     return hashlib.sha256(",".join(sorted(principals)).encode("utf-8")).hexdigest()[:32]
 
 
+def _sanitize_text(s: str) -> str:
+    # Postgres TEXT/VARCHAR cannot store NUL (\x00). OCR + some DOCX/PDF extractors emit
+    # them, which 500s /api/upload. NULs carry no semantic value here, so strip at the
+    # ingest boundary (both for storage and the embed input, so vectors match stored text).
+    return s.replace("\x00", "") if s else s
+
+
 def ingest_ir(
     ir: DocumentIR,
     *,
@@ -70,19 +77,20 @@ def ingest_ir(
                 section_path=list(b.section_path),
                 page_no=b.page_no,
                 block_type=b.block_type.value,
-                text=b.text,
+                text=_sanitize_text(b.text),
                 bbox=b.bbox.model_dump() if b.bbox else None,
             )
         )
 
     chunks = chunk_document(ir)
-    for c in chunks:
+    chunk_texts = [_sanitize_text(c.text) for c in chunks]
+    for c, text in zip(chunks, chunk_texts, strict=True):
         session.add(
             DocumentChunk(
                 chunk_id=c.chunk_id,
                 document_id=ir.document_id,
                 document_version_id=version.id,
-                text=c.text,
+                text=text,
                 page_no=c.page_no,
                 section_id=c.section_id,
                 toc_path=c.toc_path,
@@ -129,7 +137,7 @@ def ingest_ir(
 
     # Vector index (same embedder as query time).
     store.ensure_collection(collection, embedder.dim)
-    vectors = embedder.embed([c.text for c in chunks]) if chunks else []
+    vectors = embedder.embed(chunk_texts) if chunks else []
     acl_hash = _acl_hash({str(owner_id)} if owner_id else {"public"})
     points = []
     for c, vec in zip(chunks, vectors, strict=True):
