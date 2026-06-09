@@ -269,6 +269,24 @@ export const getAdminAudit = (filter: AuditFilter = {}) => {
   return getJson<AuditEntry[]>(`/api/admin/audit${qs ? `?${qs}` : ""}`);
 };
 
+// GP2 — daily-overlap activity logs (file-backed, distinct from the DB-backed audit_logs).
+export interface LogEvent {
+  ts?: string;
+  ts_local?: string;
+  log_date?: string;
+  event_id?: string;
+  trace_id?: string;
+  kind?: string;
+  outcome?: string;
+  actor?: { user_id: string | null; role?: string };
+  metrics?: Record<string, unknown>;
+  payload_hash?: string;
+}
+
+export const getLogDates = () => getJson<string[]>("/api/admin/logs/files");
+export const getLogByDate = (date: string, limit = 500) =>
+  getJson<LogEvent[]>(`/api/admin/logs/by-date?date=${date}&limit=${limit}`);
+
 // Where a citation/TOC click wants to land in the preview.
 export interface PreviewTarget {
   documentId: string;

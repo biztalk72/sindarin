@@ -4,11 +4,14 @@ component health, aggregate metrics, ingestion jobs (+ parser warnings), recent 
 
 from __future__ import annotations
 
+import json
 import os
+from datetime import date as date_t, datetime
+from pathlib import Path
 from typing import Annotated, Any
 
 from db import AuditLog, Document, DocumentChunk, IngestionJob, User
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
@@ -98,6 +101,52 @@ def admin_jobs(
         }
         for job, name in rows
     ]
+
+
+@router.get("/admin/logs/files")
+def admin_logs_files() -> list[str]:
+    """Available daily-overlap log files (GP2). Returns dates, newest first."""
+    log_dir = Path(os.environ.get("EVENTS_LOG_DIR", "/srv/var/log/hybrid-idp"))
+    if not log_dir.is_dir():
+        return []
+    dates: list[str] = []
+    for p in sorted(log_dir.glob("events-*.jsonl"), reverse=True):
+        name = p.name.removeprefix("events-").removesuffix(".jsonl")
+        try:
+            date_t.fromisoformat(name)
+        except ValueError:
+            continue
+        dates.append(name)
+    return dates
+
+
+@router.get("/admin/logs/by-date")
+def admin_logs_by_date(
+    log_date: Annotated[str, Query(alias="date")],
+    limit: int = 500,
+) -> list[dict[str, Any]]:
+    """Read one daily log file. ``date`` must be ISO ``YYYY-MM-DD``; ``limit`` caps lines."""
+    try:
+        d = date_t.fromisoformat(log_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="date must be ISO YYYY-MM-DD") from exc
+    log_dir = Path(os.environ.get("EVENTS_LOG_DIR", "/srv/var/log/hybrid-idp"))
+    f = log_dir / f"events-{d.isoformat()}.jsonl"
+    if not f.is_file():
+        return []
+    out: list[dict[str, Any]] = []
+    with f.open(encoding="utf-8") as fp:
+        for line in fp:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    # Newest first; clamp to limit. Sort key tolerates pre-GP2 rows that lack `ts`.
+    out.sort(key=lambda r: r.get("ts") or "", reverse=True)
+    return out[:limit]
 
 
 @router.get("/admin/audit")

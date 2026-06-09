@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.auth import Principal, get_current_principal
 from app.config import settings
 from app.db import get_session
+from app.event_log import emit_event
 from app.rag import build_pipeline_from_db
 from app.schemas import ChatRequest, ChatResponse, CitationOut
 
@@ -98,28 +99,46 @@ async def chat(
         outcome = "ok"
     else:
         outcome = "dropped"
+
+    event_id = _ulid()
+    payload_hash = hashlib.sha256(req.message.encode("utf-8")).hexdigest()[:32]
+    metrics = {
+        "duration_ms": duration_ms,
+        "model": settings.answer_model,
+        "claims_supported": len(result.citations),
+        "groundedness": result.confidence.get("groundedness"),
+        "retrieval_quality": result.confidence.get("retrieval_quality"),
+        "guardrails": result.guardrails,
+        "warnings": result.warnings,
+        "language": result.language,
+    }
     session.add(
         AuditLog(
             actor_id=_actor_uuid(principal),
             action="chat",
-            event_id=_ulid(),
+            event_id=event_id,
             trace_id=result.retrieval_trace_id,
             kind="chat.request",
             outcome=outcome,
-            metrics={
-                "duration_ms": duration_ms,
-                "model": settings.answer_model,
-                "claims_supported": len(result.citations),
-                "groundedness": result.confidence.get("groundedness"),
-                "retrieval_quality": result.confidence.get("retrieval_quality"),
-                "guardrails": result.guardrails,
-                "warnings": result.warnings,
-                "language": result.language,
-            },
-            payload_hash=hashlib.sha256(req.message.encode("utf-8")).hexdigest()[:32],
+            metrics=metrics,
+            payload_hash=payload_hash,
         )
     )
     session.commit()
+    # Daily activity log (GP2). Same event_id as the DB row so the two surfaces align;
+    # emit_event never raises so chat path stays clean if disk is unavailable.
+    emit_event({
+        "event_id": event_id,
+        "trace_id": result.retrieval_trace_id,
+        "kind": "chat.request",
+        "outcome": outcome,
+        "actor": {
+            "user_id": str(_actor_uuid(principal)) if _actor_uuid(principal) else None,
+            "role": principal.role,
+        },
+        "metrics": metrics,
+        "payload_hash": payload_hash,
+    })
     return ChatResponse(
         answer=result.answer,
         citations=[
