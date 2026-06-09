@@ -102,19 +102,30 @@ def admin_jobs(
 
 @router.get("/admin/audit")
 def admin_audit(
-    session: Annotated[Session, Depends(get_session)], limit: int = 50
+    session: Annotated[Session, Depends(get_session)],
+    limit: int = 50,
+    kind: str | None = None,
+    outcome: str | None = None,
 ) -> list[dict[str, Any]]:
-    rows = (
-        session.execute(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit))
-        .scalars()
-        .all()
-    )
+    # Optional filters (kind=chat.request, outcome=ok|dropped|error|...) — added with GP1
+    # so the new Activity Logs and Audit Trail pages can drill into specific event types.
+    q = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
+    if kind:
+        q = q.where(AuditLog.kind == kind)
+    if outcome:
+        q = q.where(AuditLog.outcome == outcome)
+    rows = session.execute(q).scalars().all()
     return [
         {
             "action": a.action,
             "actor_id": str(a.actor_id) if a.actor_id else None,
             "payload_hash": a.payload_hash,
             "created_at": a.created_at.isoformat() if a.created_at else None,
+            "event_id": a.event_id,
+            "trace_id": a.trace_id,
+            "kind": a.kind,
+            "outcome": a.outcome,
+            "metrics": a.metrics or {},
         }
         for a in rows
     ]

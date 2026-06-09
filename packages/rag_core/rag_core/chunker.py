@@ -51,6 +51,14 @@ def chunk_document(ir: DocumentIR, *, max_chars: int = DEFAULT_MAX_CHARS) -> lis
             return
         lead = buf[0]
         text = "\n".join(b.text for b in buf if b.text.strip())
+        # All blocks in buf had whitespace/NUL-only text → no semantically useful chunk to
+        # emit. Skip so the vector index doesn't carry empty embeddings (a class of silent
+        # failure surfaced by the GP1 NUL regression: all-NUL inputs would produce empty
+        # chunks that still got stored).
+        if not text.strip():
+            buf = []
+            buf_len = 0
+            return
         chunks.append(
             Chunk(
                 chunk_id=new_id(),

@@ -242,12 +242,32 @@ export interface AuditEntry {
   actor_id: string | null;
   payload_hash: string | null;
   created_at: string | null;
+  // GP1 observability fields. Null for rows created before the GP1 migration —
+  // legacy AdminDashboard fixtures (without these) still validate fine because all are optional.
+  event_id?: string | null;
+  trace_id?: string | null;
+  kind?: string | null;
+  outcome?: string | null;
+  metrics?: Record<string, unknown>;
+}
+
+export interface AuditFilter {
+  limit?: number;
+  kind?: string;
+  outcome?: string;
 }
 
 export const getAdminHealth = () => getJson<AdminHealth>("/api/admin/health");
 export const getAdminMetrics = () => getJson<AdminMetrics>("/api/admin/metrics");
 export const getAdminJobs = () => getJson<AdminJob[]>("/api/admin/jobs");
-export const getAdminAudit = () => getJson<AuditEntry[]>("/api/admin/audit");
+export const getAdminAudit = (filter: AuditFilter = {}) => {
+  const params = new URLSearchParams();
+  if (filter.limit != null) params.set("limit", String(filter.limit));
+  if (filter.kind) params.set("kind", filter.kind);
+  if (filter.outcome) params.set("outcome", filter.outcome);
+  const qs = params.toString();
+  return getJson<AuditEntry[]>(`/api/admin/audit${qs ? `?${qs}` : ""}`);
+};
 
 // Where a citation/TOC click wants to land in the preview.
 export interface PreviewTarget {

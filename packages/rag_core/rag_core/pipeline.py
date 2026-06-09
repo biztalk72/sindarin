@@ -159,6 +159,10 @@ class RagPipeline:
             warnings.append(f"prompt injection stripped from context ({len(injection_hits)})")
 
         draft = self.generator.generate(message, clean_packed)
+        if draft.model_outcome == "json_retry":
+            warnings.append("model returned non-JSON; recovered on retry")
+        elif draft.model_outcome == "json_failed":
+            warnings.append("model returned non-JSON; no answer produced")
         corpus_text = {cid: rec.text for cid, rec in self.corpus.items()}
         trust = validate_citations(draft, corpus_text)
 

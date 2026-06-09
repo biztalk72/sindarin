@@ -258,3 +258,50 @@ memory caps, GPU priority queue, thermal soak) becomes a non-functional requirem
 (PRD2 §10.2). The four user roles expand from `admin|user` (ADR-0005) to
 `admin|document_manager|auditor|user` — ADR-0005's JWT path is unchanged, only the role
 enum grows (tracked as a follow-up; invariant #7 single-org still holds).
+
+## ADR-0011 — Chat model: Qwen2.5-14B → Llama-3.1-Nemotron-Nano-8B (Go after Phase 0)
+
+**Status:** accepted (2026-06-09) · **Invariant:** #1 (model access stays OpenAI-compatible via vLLM)
+
+**Context.** Operational `vllm-chat` runs `Qwen2.5-14B-Instruct` (28 GiB weights, 0.45 GPU
+util). End-to-end p50 latency on `/api/chat` is 10–16s for normal queries and 40–60s for
+long responses, hitting the Next.js proxy timeout (fixed defensively to 180s + `max_tokens=768`
+cap, but the underlying latency was undesirable). A staging measurement was run to evaluate
+`nvidia/Llama-3.1-Nemotron-Nano-8B-v1` (Llama-3.1 arch, 16 GiB weights, 128K native context)
+as the chat model — keeping `bge-m3` for embedding unchanged so re-indexing is not required.
+
+**Decision.** Go: replace Qwen with Nemotron Nano-8B for the chat path. Phase 1 follows
+(observability boosting + tokenizer-aware context budget + JSON-failure retry); Phase 2/3
+land the actual `.env`/`vllm-chat` cutover.
+
+**Measurement (5 KO + 5 EN questions, identical `_SYSTEM_PROMPT`, identical fake context,
+`response_format=json_object`, `temperature=0.0`, `max_tokens=768`):**
+
+| metric | Qwen2.5-14B | Nemotron Nano-8B | gate |
+|---|---|---|---|
+| JSON parse rate | 5/5 KO + 5/5 EN = 100% | 5/5 KO + 5/5 EN = 100% | ≥ 90% ✓ |
+| Claims-with-citation | 15/15 | 14/14 | ≥ 80% ✓ |
+| p50 latency KO | 6.54s | 7.30s (+0.76s, 1.12×) | ≤ 1.5× ✓ |
+| p50 latency EN | 6.20s | **3.11s (0.50×, 2× faster)** | ≤ 1.5× ✓ |
+| GPU concurrency | chat(0.45)+embed(0.10)+staging(0.30) = 0.85; all three healthy | < 95 GiB ✓ |
+| Cold load (first download) | (already cached) | ~13 min (~15 GiB DL into hf-cache) | one-time |
+
+Korean cost of +0.76s p50 is the Llama-3.1 tokenizer penalty on Hangul (more tokens per char
+than Qwen's BPE). English saves more than KO loses — net p50 across 10 questions: 6.37s →
+5.20s. Tokenizer-aware context packing (Phase 1) will recover some of the KO gap.
+
+**Consequences.** (1) `.env` `ANSWER_MODEL=nemotron-nano-8b`, `CHAT_MODEL=nvidia/Llama-3.1-Nemotron-Nano-8B-v1`
+at cutover. `VLLM_MAX_LEN=8192` unchanged (Nemotron native 128K, cap kept conservative).
+GPU util 0.45 → can shrink to ~0.30 since the model is half the size; final value tuned in
+Phase 2. (2) `bge-m3` and `documents_bge` collection untouched — re-indexing not required.
+(3) ADR-0001 still holds — same OpenAI-compatible vLLM endpoint. (4) Phase 1 must land
+*before* cutover: JSON-failure retry in `_parse_draft` is a no-op now (100% parse rate) but
+becomes load-bearing once we start trusting a single smaller model. (5) `pack_context`
+glyph-budget review with the Llama-3.1 tokenizer — Phase 1 introduces a `transformers`
+AutoTokenizer-based budget (+~200 MB image size, accepted). (6) `tests/eval/thresholds.toml`
+re-measured at cutover; baseline expected within the gate; if not, hold and revisit per
+ADR-0004 process. (7) Phase 0 staging container is profiled-off (`profiles: ["staging"]`) —
+present in `infra/compose/llm.yml` for future re-measurement, never auto-started.
+
+See `docs/runbooks/nemotron-phase0.md` for the full Phase 0 trace and `/tmp/nemotron_phase0_compare.py`
+for the measurement script (to be promoted to `scripts/eval_compare.py` in Phase 1).

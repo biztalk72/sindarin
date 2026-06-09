@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 
+import { ForceGraph } from "@/components/ForceGraph";
 import {
+  type DocumentCard,
   type DocumentQuality,
   type GraphData,
   getGraph,
@@ -14,7 +16,41 @@ import {
   type TocNode,
 } from "@/lib/api";
 
-type Tab = "toc" | "keywords" | "graph" | "quality";
+type Tab = "toc" | "keywords" | "graph" | "quality" | "access";
+
+const LEVEL_LABEL: Record<string, string> = {
+  public: "공개",
+  internal: "내부",
+  confidential: "기밀",
+  restricted: "비공개",
+};
+
+function AccessPanel({ document }: { document: DocumentCard | null }) {
+  if (!document) return <p className="pane-placeholder">문서 메타 없음 / no metadata</p>;
+  return (
+    <div className="access">
+      <dl className="quality-grid">
+        <dt>이름 / name</dt><dd>{document.name}</dd>
+        <dt>유형 / type</dt><dd>{document.type}</dd>
+        <dt>분류 / classification</dt>
+        <dd>
+          <span className={`level-badge level-${document.security_level}`}>
+            {LEVEL_LABEL[document.security_level] ?? document.security_level}
+          </span>
+        </dd>
+        <dt>상태 / status</dt>
+        <dd>
+          <span className={`status-badge status-${document.status}`}>{document.status}</span>
+        </dd>
+        <dt>등록 / created</dt><dd>{document.created_at?.replace("T", " ").slice(0, 19) ?? "—"}</dd>
+        <dt>청크 수 / chunks</dt><dd>{document.chunk_count}</dd>
+      </dl>
+      <p className="pane-placeholder" style={{ marginTop: 12 }}>
+        Owner / ACL / lineage / retention 편집은 GP3에서 활성화됩니다 — read-only.
+      </p>
+    </div>
+  );
+}
 
 function pct(v: number | null | undefined): string {
   return typeof v === "number" ? `${Math.round(v * 100)}%` : "—";
@@ -89,59 +125,14 @@ function KeywordCloud({ keywords }: { keywords: KeywordItem[] }) {
   );
 }
 
-function KeywordGraph({ graph }: { graph: GraphData }) {
-  const { nodes, edges } = graph;
-  if (nodes.length === 0) return <p className="pane-placeholder">그래프 없음 / no graph</p>;
-  const W = 320;
-  const H = 320;
-  const cx = W / 2;
-  const cy = H / 2;
-  const r = 130;
-  const pos = new Map<string, { x: number; y: number }>();
-  nodes.forEach((n, i) => {
-    const angle = (2 * Math.PI * i) / nodes.length - Math.PI / 2;
-    pos.set(n.id, { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) });
-  });
-  const maxW = Math.max(1, ...edges.map((e) => e.weight));
-  return (
-    <svg className="kw-graph" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="keyword graph">
-      {edges.map((e, i) => {
-        const a = pos.get(e.source);
-        const b = pos.get(e.target);
-        if (!a || !b) return null;
-        return (
-          <line
-            key={i}
-            x1={a.x}
-            y1={a.y}
-            x2={b.x}
-            y2={b.y}
-            stroke="#9bbcf5"
-            strokeOpacity={0.25 + 0.6 * (e.weight / maxW)}
-            strokeWidth={1 + 2 * (e.weight / maxW)}
-          />
-        );
-      })}
-      {nodes.map((n) => {
-        const p = pos.get(n.id)!;
-        return (
-          <g key={n.id}>
-            <circle cx={p.x} cy={p.y} r={5} fill="#2563eb" />
-            <text x={p.x} y={p.y - 8} textAnchor="middle" fontSize="10" fill="#1c2024">
-              {n.label}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
 export function InsightPanel({
   documentId,
+  document,
   onOpenPreview,
 }: {
   documentId: string | null;
+  /** Optional: pass the selected DocumentCard so the "권한·ACL" tab can render without a refetch. */
+  document?: DocumentCard | null;
   onOpenPreview?: (target: PreviewTarget) => void;
 }) {
   const [tab, setTab] = useState<Tab>("toc");
@@ -184,7 +175,7 @@ export function InsightPanel({
   return (
     <div className="insight">
       <div className="insight-tabs" role="tablist">
-        {(["toc", "keywords", "graph", "quality"] as Tab[]).map((t) => (
+        {(["toc", "keywords", "graph", "quality", "access"] as Tab[]).map((t) => (
           <button
             key={t}
             type="button"
@@ -193,14 +184,22 @@ export function InsightPanel({
             className={`insight-tab${tab === t ? " active" : ""}`}
             onClick={() => setTab(t)}
           >
-            {t === "toc" ? "목차" : t === "keywords" ? "키워드" : t === "graph" ? "그래프" : "품질"}
+            {t === "toc"
+              ? "목차"
+              : t === "keywords"
+                ? "키워드"
+                : t === "graph"
+                  ? "그래프"
+                  : t === "quality"
+                    ? "품질"
+                    : "권한·ACL"}
           </button>
         ))}
       </div>
 
       <div className="insight-content">
-        {loading && <p className="pane-placeholder">불러오는 중… / loading…</p>}
-        {error && <p className="upload-error">{error}</p>}
+        {tab !== "access" && loading && <p className="pane-placeholder">불러오는 중… / loading…</p>}
+        {tab !== "access" && error && <p className="upload-error">{error}</p>}
         {!loading && !error && tab === "toc" && (
           <TocTree
             nodes={toc}
@@ -212,8 +211,9 @@ export function InsightPanel({
           />
         )}
         {!loading && !error && tab === "keywords" && <KeywordCloud keywords={keywords} />}
-        {!loading && !error && tab === "graph" && <KeywordGraph graph={graph} />}
+        {!loading && !error && tab === "graph" && <ForceGraph graph={graph} />}
         {!loading && !error && tab === "quality" && <QualityPanel quality={quality} />}
+        {tab === "access" && <AccessPanel document={document ?? null} />}
       </div>
     </div>
   );

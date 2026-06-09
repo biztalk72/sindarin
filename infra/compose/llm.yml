@@ -71,5 +71,34 @@ services:
       retries: 20
       start_period: 600s
 
+  # ----------------------------------------------------------------------------
+  # Nemotron Phase 0 staging — measurement only, no app traffic (docs/runbooks/nemotron-phase0.md)
+  # Brought up explicitly: `docker compose ... up -d vllm-chat-staging`
+  # Operational vllm-chat stays at 0.45 util, vllm-embed at 0.10 → staging gets 0.30 (headroom 0.15).
+  # ----------------------------------------------------------------------------
+  vllm-chat-staging:
+    <<: *vllm
+    entrypoint: ["vllm", "serve"]
+    command:
+      - "${STAGING_CHAT_MODEL:-nvidia/Llama-3.1-Nemotron-Nano-8B-v1}"
+      - "--served-model-name"
+      - "${STAGING_ANSWER_MODEL:-nemotron-nano-8b}"
+      - "--api-key"
+      - "${OPENAI_API_KEY:?set OPENAI_API_KEY in .env}"
+      - "--max-model-len"
+      - "${STAGING_VLLM_MAX_LEN:-8192}"
+      - "--gpu-memory-utilization"
+      - "${STAGING_VLLM_GPU_UTIL:-0.30}"
+      - "--port"
+      - "8000"
+    ports: ["${STAGING_VLLM_CHAT_PORT:-8011}:8000"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 30s
+      timeout: 5s
+      retries: 20
+      start_period: 600s
+    profiles: ["staging"]
+
 volumes:
   hf-cache:
