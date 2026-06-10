@@ -158,17 +158,33 @@ class IngestionJob(Base):
 
 
 class AclEntry(Base):
-    """Document/collection permission (PRD2 §6.2). Enforced as ACL double-check (invariant #2)."""
+    """Document/collection permission (PRD2 §6.2). Enforced as ACL double-check (invariant #2).
+
+    ``principal_type`` distinguishes per-user grants (``user``, ``principal_id`` is a user
+    UUID as text) from role grants (``role``, ``principal_id`` is a role name like ``user``).
+    Role grants are how single-org ingest makes INTERNAL/PUBLIC documents readable to any
+    authenticated user without an N×M user-per-document fan-out.
+    """
 
     __tablename__ = "acl_entries"
     __table_args__ = (
-        UniqueConstraint("resource_id", "resource_type", "principal_id", "permission"),
+        UniqueConstraint(
+            "resource_id",
+            "resource_type",
+            "principal_type",
+            "principal_id",
+            "permission",
+            name="uq_acl_entries_resource_principal_permission",
+        ),
     )
 
     id: Mapped[uuid.UUID] = pk_uuid()
     resource_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     resource_type: Mapped[str] = mapped_column(String(32), nullable=False)  # document | collection
-    principal_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    principal_type: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="user"
+    )  # 'user' (uuid) | 'role' (role name)
+    principal_id: Mapped[str] = mapped_column(String(64), nullable=False)
     permission: Mapped[str] = mapped_column(String(32), nullable=False)  # read | write | manage
 
 

@@ -142,7 +142,10 @@ def _run_forget(session: Session, requester_id: uuid.UUID) -> dict[str, Any]:
         update(User).where(User.id == requester_id).values(email=tombstone, password_hash=None)
     )
     acl_deleted = session.execute(
-        delete(AclEntry).where(AclEntry.principal_id == requester_id)
+        delete(AclEntry).where(
+            AclEntry.principal_type == "user",
+            AclEntry.principal_id == str(requester_id),
+        )
     ).rowcount
     return {
         "audit_actor_cleared": True,

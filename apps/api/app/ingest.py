@@ -114,7 +114,22 @@ def ingest_ir(
             AclEntry(
                 resource_id=ir.document_id,
                 resource_type="document",
-                principal_id=owner_id,
+                principal_type="user",
+                principal_id=str(owner_id),
+                permission="read",
+            )
+        )
+    # Single-org default: any authenticated caller can read INTERNAL/PUBLIC documents
+    # (PRD2 §2.7). Without this row a non-admin user can never see admin's uploads and the
+    # chat pipeline returns "no authorized documents matched the query". CONFIDENTIAL /
+    # RESTRICTED stay per-owner until an explicit ACL editor grants them (GP3-edit).
+    if security_level in (SecurityLevel.PUBLIC, SecurityLevel.INTERNAL):
+        session.add(
+            AclEntry(
+                resource_id=ir.document_id,
+                resource_type="document",
+                principal_type="role",
+                principal_id="user",
                 permission="read",
             )
         )
